@@ -391,8 +391,23 @@ function loop(ts) {
         }
       }
 
+      // Verifica se algum pixel da máscara indica presença de pessoa
+      let personDetected = false;
+      for (let i = 0; i < maskSize; i++) {
+        if (workMask[i] > 0.15) { personDetected = true; break; }
+      }
+
       pCtx.clearRect(0, 0, CW, PZH);
-      pCtx.putImageData(imgData, 0, 0);
+      if (personDetected) {
+        pCtx.putImageData(imgData, 0, 0);
+      } else {
+        // Sem perfil detectado — exibe frame completo da câmera (espelhado)
+        pCtx.save();
+        pCtx.translate(CW, 0);
+        pCtx.scale(-1, 1);
+        pCtx.drawImage(vCanvas, cropX, 0, cropW, vH, 0, 0, CW, PZH);
+        pCtx.restore();
+      }
       renderCard(pCanvas);
 
       if (lastTs > 0) {
