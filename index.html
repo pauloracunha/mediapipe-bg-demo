@@ -401,9 +401,13 @@ function loop(ts) {
       pCtx.restore();
 
       if (personDetected) {
-        // destination-in: mantém pixels do frame onde a máscara é opaca, apaga o resto
+        // destination-in com máscara espelhada — frame e máscara devem ter mesma orientação
         pCtx.globalCompositeOperation = 'destination-in';
-        pCtx.drawImage(mCanvas, 0, 0, CW, PZH); // GPU faz resize + apply
+        pCtx.save();
+        pCtx.translate(CW, 0);
+        pCtx.scale(-1, 1);
+        pCtx.drawImage(mCanvas, 0, 0, CW, PZH);
+        pCtx.restore();
         pCtx.globalCompositeOperation = 'source-over';
       }
       // sem pessoa: pCanvas já tem o frame completo — usa direto
