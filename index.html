@@ -117,6 +117,38 @@
     #status.ok      { color: #4caf50; }
     #status.err     { color: #f44336; }
     #status.loading { color: #888; }
+
+    #debugLog {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      max-height: 45vh;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.93);
+      color: #ccc;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      padding: 8px 10px 10px;
+      z-index: 9999;
+      display: none;
+      border-top: 2px solid #f44336;
+    }
+    #debugLog .dbg-err  { color: #ff5252; font-weight: 700; }
+    #debugLog .dbg-warn { color: #FFD700; }
+    #debugLog .dbg-info { color: #69b4ff; }
+    #debugClose {
+      position: sticky;
+      top: 0;
+      float: right;
+      background: #f44336;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-bottom: 4px;
+    }
   </style>
 </head>
 <body>
@@ -174,6 +206,11 @@
 
 <div id="status" class="loading">Carregando modelo MediaPipe…</div>
 
+<div id="debugLog">
+  <button id="debugClose">✕ fechar</button>
+  <div id="debugLines"></div>
+</div>
+
 <video id="video" autoplay muted playsinline style="display:none"></video>
 
 <script type="module">
@@ -181,6 +218,25 @@ import {
   ImageSegmenter,
   FilesetResolver,
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
+
+// ── Debug overlay ────────────────────────────────────────────
+const debugLog   = document.getElementById('debugLog');
+const debugLines = document.getElementById('debugLines');
+document.getElementById('debugClose').onclick = () => { debugLog.style.display = 'none'; };
+
+let _dbgFrameCount = 0;
+function dbg(msg, level = 'info') {
+  console[level === 'err' ? 'error' : level === 'warn' ? 'warn' : 'log']('[dbg]', msg);
+  debugLog.style.display = 'block';
+  const line = document.createElement('div');
+  line.className = `dbg-${level}`;
+  const ts = new Date().toTimeString().slice(0, 8);
+  line.textContent = `[${ts}] ${msg}`;
+  debugLines.appendChild(line);
+  // mantém últimas 60 linhas
+  while (debugLines.children.length > 60) debugLines.firstChild.remove();
+  debugLog.scrollTop = debugLog.scrollHeight;
+}
 
 // ── Layout constants (base 400×560, escala 1.2 → 480×672) ────
 const CW  = 480, CH = 672;
@@ -251,10 +307,18 @@ async function loadModel() {
   try {
     segmenter = await ImageSegmenter.createFromOptions(vision,
       { ...modelOpts, baseOptions: { ...modelOpts.baseOptions, delegate: 'GPU' } });
-  } catch {
+    dbg('Modelo carregado — delegate: GPU', 'info');
+  } catch (eGpu) {
+    dbg('GPU falhou: ' + eGpu.message + ' — tentando CPU', 'warn');
     status.textContent = 'GPU indisponível, usando CPU…';
-    segmenter = await ImageSegmenter.createFromOptions(vision,
-      { ...modelOpts, baseOptions: { ...modelOpts.baseOptions, delegate: 'CPU' } });
+    try {
+      segmenter = await ImageSegmenter.createFromOptions(vision,
+        { ...modelOpts, baseOptions: { ...modelOpts.baseOptions, delegate: 'CPU' } });
+      dbg('Modelo carregado — delegate: CPU', 'info');
+    } catch (eCpu) {
+      dbg('CPU também falhou: ' + eCpu.message, 'err');
+      throw eCpu;
+    }
   }
   status.className   = 'ok';
   status.textContent = 'Modelo pronto. Clique em Câmera.';
@@ -347,8 +411,15 @@ function loop(ts) {
 
   try {
     segmenter.segmentForVideo(video, ts, (result) => {
+      _dbgFrameCount++;
+      if (_dbgFrameCount === 1) dbg(`1º callback — vídeo ${vW}×${vH}`, 'info');
+
       const masks = result.confidenceMasks;
-      if (!masks?.length) { requestAnimationFrame(loop); return; }
+      if (!masks?.length) {
+        if (_dbgFrameCount <= 5 || _dbgFrameCount % 60 === 0)
+          dbg(`frame ${_dbgFrameCount}: confidenceMasks vazio`, 'warn');
+        requestAnimationFrame(loop); return;
+      }
 
       const mask     = masks[0];
       const maskW    = mask.width;
@@ -371,24 +442,37 @@ function loop(ts) {
       prevMask.set(workMask);
 
       // Converte máscara em ImageData alpha-only (maskW×maskH — loop pequeno ~36k)
-      // R=G=B=255, A = confiança mapeada para 0-255 com threshold e feather
       if (mCanvas.width !== maskW || mCanvas.height !== maskH) {
         mCanvas.width = maskW; mCanvas.height = maskH;
+        dbg(`máscara redimensionada: ${maskW}×${maskH}`, 'info');
       }
       const maskImgData  = new ImageData(maskW, maskH);
       const md           = maskImgData.data;
       const featherInv   = feather > 0 ? 1 / feather : 255;
       let   personDetected = false;
+      let   maskMax = 0;
 
       for (let i = 0; i < maskSize; i++) {
         const v = workMask[i];
+        if (v > maskMax) maskMax = v;
         if (v > 0.05) personDetected = true;
         const a = v <= thr ? 0 : Math.min(255, Math.round((v - thr) * featherInv * 255));
         const p = i * 4;
         md[p] = md[p+1] = md[p+2] = 255;
         md[p+3] = a;
       }
-      mCtx.putImageData(maskImgData, 0, 0);
+
+      // Log max da máscara nos primeiros frames e a cada 5s (~150 frames)
+      if (_dbgFrameCount <= 5 || _dbgFrameCount % 150 === 0) {
+        dbg(`frame ${_dbgFrameCount}: maskMax=${maskMax.toFixed(3)} thr=${thr.toFixed(2)} person=${personDetected}`,
+          maskMax < 0.05 ? 'warn' : 'info');
+      }
+
+      try {
+        mCtx.putImageData(maskImgData, 0, 0);
+      } catch (e) {
+        dbg('putImageData falhou: ' + e.message, 'err'); throw e;
+      }
 
       // ── Compositing no GPU ────────────────────────────────
       pCtx.clearRect(0, 0, CW, PZH);
@@ -401,14 +485,19 @@ function loop(ts) {
       pCtx.restore();
 
       if (personDetected) {
-        // destination-in com máscara espelhada — frame e máscara devem ter mesma orientação
-        pCtx.globalCompositeOperation = 'destination-in';
-        pCtx.save();
-        pCtx.translate(CW, 0);
-        pCtx.scale(-1, 1);
-        pCtx.drawImage(mCanvas, 0, 0, CW, PZH);
-        pCtx.restore();
-        pCtx.globalCompositeOperation = 'source-over';
+        try {
+          // destination-in com máscara espelhada — frame e máscara mesma orientação
+          pCtx.globalCompositeOperation = 'destination-in';
+          pCtx.save();
+          pCtx.translate(CW, 0);
+          pCtx.scale(-1, 1);
+          pCtx.drawImage(mCanvas, 0, 0, CW, PZH);
+          pCtx.restore();
+          pCtx.globalCompositeOperation = 'source-over';
+        } catch (e) {
+          dbg('compositing falhou: ' + e.message, 'err');
+          pCtx.globalCompositeOperation = 'source-over';
+        }
       }
       // sem pessoa: pCanvas já tem o frame completo — usa direto
 
@@ -427,7 +516,7 @@ function loop(ts) {
       requestAnimationFrame(loop);
     });
   } catch (e) {
-    console.error('segmentForVideo error:', e);
+    dbg('segmentForVideo erro: ' + e.message, 'err');
     status.className   = 'err';
     status.textContent = 'Erro segmentação: ' + e.message;
     requestAnimationFrame(loop);
