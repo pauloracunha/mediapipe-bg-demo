@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Figurinha Copa 2026 — MediaPipe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     :root { --country: #009c3b; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
       background: #0d0d16;
       color: #e0e0e0;
       min-height: 100vh;
@@ -39,8 +40,15 @@
       border-radius: 14px;
       padding: 14px 20px;
       width: 100%;
-      max-width: 520px;
+      max-width: 600px;
     }
+
+    .controls-sep {
+      width: 100%;
+      height: 1px;
+      background: #2a2a3a;
+    }
+
     label {
       font-size: 0.78rem;
       color: #888;
@@ -48,7 +56,7 @@
       align-items: center;
       gap: 6px;
     }
-    input[type="text"] {
+    input[type="text"], input[type="number"] {
       background: #22222e;
       color: #fff;
       border: 1px solid #3a3a4c;
@@ -57,6 +65,7 @@
       font-size: 0.85rem;
       font-weight: 700;
       letter-spacing: 0.02em;
+      font-family: inherit;
     }
     input[type="range"] {
       width: 80px;
@@ -76,6 +85,7 @@
     .btn-start { background: var(--country); color: #fff; }
     .btn-stop  { background: #2a2a3a; color: #ccc; }
     .btn-dl    { background: #FFD700; color: #000; }
+    .btn-flip  { background: #2a2a3a; color: #ccc; }
 
     .sticker-wrap {
       position: relative;
@@ -114,21 +124,46 @@
 <h1>Figurinha <em>Copa do Mundo 2026™</em></h1>
 
 <div class="controls">
+  <!-- identidade -->
   <label>
     Nome
-    <input type="text" id="playerName" value="SEU NOME" maxlength="18" style="width:130px">
+    <input type="text" id="playerName" value="NOME DO COLABORADOR" maxlength="26" style="width:180px">
   </label>
   <label>
-    País
-    <input type="text" id="countryCode" value="BRA" maxlength="3"
-           style="width:48px;text-transform:uppercase;text-align:center">
+    Nº
+    <input type="number" id="playerNumber" value="10" min="1" max="99" style="width:52px;text-align:center">
   </label>
+
+  <!-- cargo / depto -->
+  <label>
+    Cargo
+    <input type="text" id="playerCargo" value="Cargo" maxlength="28" style="width:130px">
+  </label>
+  <label>
+    Depto.
+    <input type="text" id="playerDepto" value="Departamento" maxlength="28" style="width:140px">
+  </label>
+
+  <div class="controls-sep"></div>
+
+  <!-- sliders -->
   <label>
     Máscara
     <input type="range" id="threshold" min="1" max="92" value="42">
   </label>
+  <label>
+    Borda
+    <input type="range" id="feather" min="2" max="40" value="15">
+  </label>
+  <label>
+    Temporal
+    <input type="range" id="temporal" min="0" max="85" value="60">
+  </label>
+
+  <!-- botões -->
   <button class="btn-start" id="btnStart" disabled>▶ Câmera</button>
   <button class="btn-stop"  id="btnStop"  disabled>■ Parar</button>
+  <button class="btn-flip"  id="btnFlip"  disabled>⇄ Trocar</button>
   <button class="btn-dl"    id="btnDl">⬇ Salvar</button>
 </div>
 
@@ -147,56 +182,51 @@ import {
   FilesetResolver,
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
 
-// ── Card dimensions (portrait sticker 5:7) ───────────────────
-const CW = 480, CH = 672;
+// ── Layout constants (base 400×560, escala 1.2 → 480×672) ────
+const CW  = 480, CH = 672;
+const S   = CW / 400;                         // 1.2
+const HD  = Math.round(60  * S);              // header h   = 72
+const BH  = Math.round(12  * S);              // band h     = 14
+const PZY = HD + BH;                          // photo y    = 86
+const PZH = Math.round(300 * S);              // photo h    = 360
+const BSH = Math.round(36  * S);              // brand-strip h = 43
+const IY  = PZY + PZH + BH;                  // info y     = 460
 
-// ── DOM refs ─────────────────────────────────────────────────
-const video     = document.getElementById('video');
-const canvas    = document.getElementById('output');
-const ctx       = canvas.getContext('2d');
-const status    = document.getElementById('status');
-const btnStart  = document.getElementById('btnStart');
-const btnStop   = document.getElementById('btnStop');
-const btnDl     = document.getElementById('btnDl');
-const fpsBadge  = document.getElementById('fpsBadge');
-const nameInput = document.getElementById('playerName');
-const ccInput   = document.getElementById('countryCode');
-const thrInput  = document.getElementById('threshold');
+// ── DOM ──────────────────────────────────────────────────────
+const video         = document.getElementById('video');
+const canvas        = document.getElementById('output');
+const ctx           = canvas.getContext('2d');
+const status        = document.getElementById('status');
+const btnStart      = document.getElementById('btnStart');
+const btnStop       = document.getElementById('btnStop');
+const btnDl         = document.getElementById('btnDl');
+const btnFlip       = document.getElementById('btnFlip');
+const fpsBadge      = document.getElementById('fpsBadge');
+const nameInput     = document.getElementById('playerName');
+const numInput      = document.getElementById('playerNumber');
+const cargoInput    = document.getElementById('playerCargo');
+const deptoInput    = document.getElementById('playerDepto');
+const thrInput      = document.getElementById('threshold');
+const featherInput  = document.getElementById('feather');
+const temporalInput = document.getElementById('temporal');
 
 // ── State ────────────────────────────────────────────────────
 let segmenter = null, stream = null, running = false;
 let lastTs = 0, fpsArr = [];
-
-// ── Country palettes [dark, mid, light/accent] ───────────────
-const PALETTES = {
-  BRA: ['#003b1a', '#0a6e31', '#FFDF00'],
-  ARG: ['#2a6fa8', '#74ACDF', '#e8f4fd'],
-  POR: ['#003d00', '#006600', '#cc0000'],
-  ESP: ['#7a0010', '#c60b1e', '#f1bf00'],
-  FRA: ['#001f6b', '#002395', '#ED2939'],
-  ALE: ['#111',    '#333',    '#D00000'],
-  ING: ['#00154c', '#CF0823', '#fff'   ],
-  URU: ['#002b5c', '#003580', '#5EB6E4'],
-  MEX: ['#003a1c', '#006847', '#CE1126'],
-  USA: ['#001c4d', '#002868', '#BF0A30'],
-};
-const DEFAULT_PAL = ['#00334d', '#0077b6', '#00b4d8'];
-
-function palette(code) { return PALETTES[code] || DEFAULT_PAL; }
-
-function syncCSSVar() {
-  const col = palette((ccInput.value || 'BRA').toUpperCase().slice(0, 3))[1];
-  document.documentElement.style.setProperty('--country', col);
-}
+let cameras = [], camIdx = 0;
+let workMask = null, prevMask = null;
 
 // ── Offscreen canvases ───────────────────────────────────────
 const vCanvas = document.createElement('canvas');
 const vCtx    = vCanvas.getContext('2d', { willReadFrequently: true });
+
+// Pessoa ocupa só a photo zone (480 × 360)
 const pCanvas = document.createElement('canvas');
-pCanvas.width = CW; pCanvas.height = CH;
+pCanvas.width  = CW;
+pCanvas.height = PZH;
 const pCtx = pCanvas.getContext('2d');
 
-// ── Load model ───────────────────────────────────────────────
+// ── Model ────────────────────────────────────────────────────
 async function loadModel() {
   status.className   = 'loading';
   status.textContent = 'Inicializando runtime…';
@@ -220,15 +250,32 @@ async function loadModel() {
 }
 
 // ── Camera ───────────────────────────────────────────────────
-async function startCamera() {
+async function enumerateCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  cameras = devices.filter(d => d.kind === 'videoinput');
+}
+
+async function startCamera(deviceId) {
+  stream?.getTracks().forEach(t => t.stop());
+  const constraint = deviceId
+    ? { deviceId: { exact: deviceId } }
+    : { facingMode: 'user' };
   stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+    video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...constraint },
     audio: false,
   });
   video.srcObject = stream;
-  await new Promise(r => video.addEventListener('loadedmetadata', r, { once: true }));
+  if (video.readyState < 1)
+    await new Promise(r => video.addEventListener('loadedmetadata', r, { once: true }));
+  await video.play();
   vCanvas.width  = video.videoWidth;
   vCanvas.height = video.videoHeight;
+  await enumerateCameras();
+  btnFlip.disabled = cameras.length < 2;
+}
+
+async function initCamera() {
+  await startCamera(null);
   running = true;
   btnStart.disabled = true;
   btnStop.disabled  = false;
@@ -237,11 +284,30 @@ async function startCamera() {
   requestAnimationFrame(loop);
 }
 
+async function flipCamera() {
+  if (cameras.length < 2) return;
+  camIdx = (camIdx + 1) % cameras.length;
+  btnFlip.disabled = true;
+  status.textContent = 'Trocando câmera…';
+  const wasRunning = running;
+  running = false;
+  await startCamera(cameras[camIdx].deviceId);
+  running = wasRunning;
+  if (running) {
+    lastTs = 0; fpsArr = []; prevMask = null; workMask = null;
+    requestAnimationFrame(loop);
+  }
+  btnFlip.disabled  = cameras.length < 2;
+  status.className  = 'ok';
+  status.textContent = `Câmera ${camIdx + 1}/${cameras.length} ativa.`;
+}
+
 function stopCamera() {
   running = false;
   stream?.getTracks().forEach(t => t.stop());
   btnStart.disabled = false;
   btnStop.disabled  = true;
+  btnFlip.disabled  = true;
   status.textContent = 'Câmera parada.';
   renderCard(null);
 }
@@ -249,159 +315,461 @@ function stopCamera() {
 // ── Render loop ──────────────────────────────────────────────
 function loop(ts) {
   if (!running) return;
+  if (video.readyState < 2) { requestAnimationFrame(loop); return; }
 
   const vW  = video.videoWidth;
   const vH  = video.videoHeight;
   const thr = parseInt(thrInput.value) / 100;
 
-  // Portrait center-crop from landscape video
-  const cropW  = Math.round(vH * (CW / CH));
+  // Crop central portrait para ratio CW:PZH
+  const cropW  = Math.round(vH * (CW / PZH));
   const cropX  = Math.round((vW - cropW) / 2);
   const scaleX = cropW / CW;
-  const scaleY = vH   / CH;
+  const scaleY = vH   / PZH;
 
-  // Read video pixels (not mirrored — we handle mirror in the loop)
   vCtx.drawImage(video, 0, 0);
   const vFrame = vCtx.getImageData(0, 0, vW, vH).data;
 
-  segmenter.segmentForVideo(video, ts, (result) => {
-    const masks = result.confidenceMasks;
-    if (!masks?.length) { requestAnimationFrame(loop); return; }
+  const feather = parseInt(featherInput.value) / 100;
+  const tempW   = parseInt(temporalInput.value) / 100;
 
-    const maskData = masks[0].getAsFloat32Array();
+  try {
+    segmenter.segmentForVideo(video, ts, (result) => {
+      const masks = result.confidenceMasks;
+      if (!masks?.length) { requestAnimationFrame(loop); return; }
 
-    // Build portrait RGBA — mirror horiz. for selfie view
-    const imgData = new ImageData(CW, CH);
-    const d       = imgData.data;
+      const mask     = masks[0];
+      const maskW    = mask.width;
+      const maskH    = mask.height;
+      const maskSize = maskW * maskH;
+      const rawMask  = mask.getAsFloat32Array();
 
-    for (let cy = 0; cy < CH; cy++) {
-      for (let cx = 0; cx < CW; cx++) {
-        // Mirror x so it feels like a selfie
-        const vx = Math.min(vW - 1, Math.round(cropX + (CW - 1 - cx) * scaleX));
-        const vy = Math.min(vH - 1, Math.round(cy * scaleY));
+      // Temporal smoothing
+      if (!workMask || workMask.length !== maskSize) {
+        workMask = new Float32Array(maskSize);
+        prevMask = null;
+      }
+      if (prevMask && tempW > 0) {
+        for (let i = 0; i < maskSize; i++)
+          workMask[i] = (1 - tempW) * rawMask[i] + tempW * prevMask[i];
+      } else {
+        workMask.set(rawMask);
+      }
+      if (!prevMask) prevMask = new Float32Array(maskSize);
+      prevMask.set(workMask);
 
-        const conf = maskData[vy * vW + vx];
-        const pi   = (cy * CW + cx) * 4;
+      // Monta RGBA só para a photo zone (CW × PZH)
+      const imgData = new ImageData(CW, PZH);
+      const d       = imgData.data;
 
-        if (conf > thr) {
-          const vi    = (vy * vW + vx) * 4;
-          const alpha = Math.min(1, (conf - thr) / 0.12); // soft edge
-          d[pi]   = vFrame[vi];
-          d[pi+1] = vFrame[vi+1];
-          d[pi+2] = vFrame[vi+2];
-          d[pi+3] = Math.round(alpha * 255);
+      for (let cy = 0; cy < PZH; cy++) {
+        for (let cx = 0; cx < CW; cx++) {
+          const vx = Math.min(vW - 1, cropX + (CW - 1 - cx) * scaleX); // mirror
+          const vy = Math.min(vH - 1, cy * scaleY);
+
+          // Interpolação bilinear da máscara
+          const mxf = (vx / vW) * maskW, myf = (vy / vH) * maskH;
+          const mx0 = Math.floor(mxf), my0 = Math.floor(myf);
+          const mx1 = Math.min(maskW-1, mx0+1), my1 = Math.min(maskH-1, my0+1);
+          const fxr = mxf - mx0, fyr = myf - my0;
+          const conf = workMask[my0*maskW+mx0] * (1-fxr) * (1-fyr)
+                     + workMask[my0*maskW+mx1] *    fxr  * (1-fyr)
+                     + workMask[my1*maskW+mx0] * (1-fxr) *    fyr
+                     + workMask[my1*maskW+mx1] *    fxr  *    fyr;
+
+          if (conf > thr) {
+            const ivx = Math.min(vW-1, Math.round(vx));
+            const ivy = Math.min(vH-1, Math.round(vy));
+            const vi  = (ivy * vW + ivx) * 4;
+            const pi  = (cy  * CW + cx)  * 4;
+            const alpha = Math.min(1, (conf - thr) / feather);
+            d[pi]   = vFrame[vi];
+            d[pi+1] = vFrame[vi+1];
+            d[pi+2] = vFrame[vi+2];
+            d[pi+3] = Math.round(alpha * 255);
+          }
         }
       }
-    }
 
-    pCtx.putImageData(imgData, 0, 0);
-    renderCard(pCanvas);
+      pCtx.clearRect(0, 0, CW, PZH);
+      pCtx.putImageData(imgData, 0, 0);
+      renderCard(pCanvas);
 
-    if (lastTs > 0) {
-      fpsArr.push(ts - lastTs);
-      if (fpsArr.length > 20) fpsArr.shift();
-      const avg = fpsArr.reduce((a, b) => a + b, 0) / fpsArr.length;
-      fpsBadge.textContent = `${(1000 / avg).toFixed(1)} fps`;
-    }
-    lastTs = ts;
+      if (lastTs > 0) {
+        fpsArr.push(ts - lastTs);
+        if (fpsArr.length > 20) fpsArr.shift();
+        const avg = fpsArr.reduce((a, b) => a + b, 0) / fpsArr.length;
+        fpsBadge.textContent = `${(1000 / avg).toFixed(1)} fps`;
+      }
+      lastTs = ts;
 
-    masks[0].close();
-    result.close();
+      mask.close();
+      result.close();
+      requestAnimationFrame(loop);
+    });
+  } catch (e) {
+    console.error('segmentForVideo error:', e);
+    status.className   = 'err';
+    status.textContent = 'Erro segmentação: ' + e.message;
     requestAnimationFrame(loop);
-  });
+  }
 }
 
-// ── Card rendering ───────────────────────────────────────────
-const R = 14; // corner radius
+// ── Helpers de desenho ───────────────────────────────────────
+const CORNER_R = 14;
 
 function rrPath(x, y, w, h) {
   const p = new Path2D();
-  p.roundRect(x, y, w, h, R);
+  p.roundRect(x, y, w, h, CORNER_R);
   return p;
 }
 
+function drawStarPath(cx, cy, pts, ro, ri) {
+  ctx.beginPath();
+  for (let i = 0; i < pts * 2; i++) {
+    const a = (i * Math.PI / pts) - Math.PI / 2;
+    const r = i % 2 === 0 ? ro : ri;
+    i === 0
+      ? ctx.moveTo(cx + Math.cos(a)*r, cy + Math.sin(a)*r)
+      : ctx.lineTo(cx + Math.cos(a)*r, cy + Math.sin(a)*r);
+  }
+  ctx.closePath();
+}
+
+function bandGrad() {
+  const g = ctx.createLinearGradient(0, 0, CW, 0);
+  g.addColorStop(0,   '#FFB800');
+  g.addColorStop(0.3, '#FFDF00');
+  g.addColorStop(0.5, '#FFE84D');
+  g.addColorStop(0.7, '#FFDF00');
+  g.addColorStop(1,   '#FFB800');
+  return g;
+}
+
+function drawSunburst(focalX, focalAbsY) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, PZY, CW, PZH);
+  ctx.clip();
+
+  const grad = ctx.createRadialGradient(focalX, focalAbsY, 0, focalX, focalAbsY, PZH * 1.4);
+  grad.addColorStop(0,    'rgba(255,223,0,0.28)');
+  grad.addColorStop(0.55, 'rgba(255,184,0,0.10)');
+  grad.addColorStop(1,    'rgba(0,18,64,0)');
+
+  // Polígonos do SVG original (400×300) → escala S, y offset +PZY
+  const rays = [
+    [[168,0],[176,0]], [[158,0],[166,0]], [[148,0],[156,0]],
+    [[134,0],[142,0]], [[118,0],[128,0]], [[98,0],[110,0]],
+    [[74,0],[88,0]],   [[44,0],[60,0]],   [[6,0],[26,0]],
+    [[0,16],[0,42]],   [[0,80],[0,120]],  [[0,155],[0,200]],
+    [[224,0],[232,0]], [[234,0],[242,0]], [[244,0],[252,0]],
+    [[258,0],[266,0]], [[272,0],[282,0]], [[290,0],[302,0]],
+    [[312,0],[326,0]], [[340,0],[356,0]], [[374,0],[394,0]],
+    [[400,20],[400,46]], [[400,84],[400,124]], [[400,158],[400,202]],
+  ];
+
+  rays.forEach(([[x1,y1],[x2,y2]], i) => {
+    ctx.beginPath();
+    ctx.moveTo(focalX,    focalAbsY);
+    ctx.lineTo(x1*S,      PZY + y1*S);
+    ctx.lineTo(x2*S,      PZY + y2*S);
+    ctx.closePath();
+    ctx.fillStyle  = grad;
+    ctx.globalAlpha = i % 2 === 0 ? 1 : 0.6;
+    ctx.fill();
+  });
+
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawPhotoStars() {
+  const stars = [
+    {x:42,  y:44,  sz:13, a:.55}, {x:26,  y:78,  sz:8, a:.40},
+    {x:64,  y:96,  sz:6,  a:.35}, {x:22,  y:118, sz:7, a:.30},
+    {x:52,  y:130, sz:5,  a:.28}, {x:356, y:38,  sz:12,a:.52},
+    {x:374, y:80,  sz:7,  a:.38}, {x:338, y:104, sz:6, a:.32},
+    {x:378, y:122, sz:5,  a:.28},
+  ];
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  stars.forEach(({x, y, sz, a}) => {
+    ctx.fillStyle = `rgba(255,223,0,${a})`;
+    ctx.font      = `${Math.round(sz*S)}px Arial`;
+    ctx.fillText('★', x*S, PZY + y*S);
+  });
+}
+
+function drawRing(cx, cy, r, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawCornerBracket(x, y, dir) {
+  const sz = Math.round(22 * S);
+  ctx.strokeStyle = 'rgba(255,223,0,0.55)';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  if (dir === 'tl') {
+    ctx.moveTo(x + sz, y); ctx.lineTo(x, y); ctx.lineTo(x, y + sz);
+  } else {
+    ctx.moveTo(x - sz, y); ctx.lineTo(x, y); ctx.lineTo(x, y + sz);
+  }
+  ctx.stroke();
+}
+
+// ── Renderização do card ─────────────────────────────────────
 function renderCard(personSrc) {
-  const country = (ccInput.value || 'BRA').toUpperCase().slice(0, 3);
-  const name    = (nameInput.value || 'JOGADOR').toUpperCase();
-  const pal     = palette(country);
+  const name   = (nameInput.value  || 'NOME DO COLABORADOR').toUpperCase();
+  const numero = String(numInput.value  || '10').trim();
+  const cargo  = (cargoInput.value || 'Cargo').trim();
+  const depto  = (deptoInput.value || 'Departamento').trim();
 
   ctx.clearRect(0, 0, CW, CH);
-
-  // 1 ── Background gradient (country colors) ────────────────
   ctx.save();
   ctx.clip(rrPath(0, 0, CW, CH));
-  const bg = ctx.createLinearGradient(0, 0, CW * 0.5, CH);
-  bg.addColorStop(0,   pal[0]);
-  bg.addColorStop(0.5, pal[1]);
-  bg.addColorStop(1,   pal[2]);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, CW, CH);
 
-  // "26" ghost watermark
-  ctx.globalAlpha  = 0.055;
-  ctx.fillStyle    = '#fff';
-  ctx.font         = `900 ${CH * 0.65}px Impact, 'Arial Black', Arial`;
-  ctx.textAlign    = 'right';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText('26', CW + 14, CH + 14);
-  ctx.globalAlpha  = 1;
+  const hPad = Math.round(18 * S);
+
+  // ── 1. HEADER ─────────────────────────────────────────────
+  ctx.fillStyle = '#005C1F';
+  ctx.fillRect(0, 0, CW, HD);
+
+  // Textura diagonal sutil
+  ctx.save();
+  ctx.globalAlpha = 0.025;
+  ctx.fillStyle   = '#000';
+  for (let i = -CW; i < CW * 2; i += Math.round(21 * S)) {
+    ctx.fillRect(i, 0, Math.round(S), HD);
+  }
+  ctx.globalAlpha = 1;
   ctx.restore();
 
-  // 2 ── Segmented person (clipped) ──────────────────────────
+  // Linha dourada inferior
+  ctx.fillStyle = 'rgba(255,223,0,0.6)';
+  ctx.fillRect(0, HD - 2, CW, 2);
+
+  // Esquerda: FIFA World Cup + BRASIL + estrelas
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle    = 'rgba(255,255,255,0.55)';
+  ctx.font         = `600 ${Math.round(7.5*S)}px Poppins, Arial`;
+  ctx.fillText('FIFA World Cup™', hPad, Math.round(10*S));
+
+  ctx.fillStyle = '#FFDF00';
+  ctx.font      = `900 ${Math.round(26*S)}px Poppins, "Arial Black", Arial`;
+  ctx.fillText('BRASIL', hPad, Math.round(22*S));
+
+  ctx.font = `${Math.round(8*S)}px Arial`;
+  for (let i = 0; i < 5; i++)
+    ctx.fillText('★', hPad + i * Math.round(10*S), Math.round(51*S));
+
+  // Centro: badge CBF
+  const badgeCX = CW / 2;
+  const badgeCY = HD / 2;
+  const badgeR  = Math.round(19 * S);
+  ctx.fillStyle   = '#007A30';
+  ctx.beginPath();
+  ctx.arc(badgeCX, badgeCY, badgeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#FFDF00';
+  ctx.lineWidth   = Math.round(2 * S);
+  ctx.stroke();
+  ctx.lineWidth   = Math.round(0.9 * S);
+  drawStarPath(badgeCX, badgeCY, 5, Math.round(11*S), Math.round(5*S));
+  ctx.stroke();
+
+  // Direita: Copa do Mundo + 2026
+  ctx.textAlign    = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle    = 'rgba(255,255,255,0.55)';
+  ctx.font         = `600 ${Math.round(7.5*S)}px Poppins, Arial`;
+  ctx.fillText('Copa do Mundo', CW - hPad, Math.round(10*S));
+  ctx.fillStyle = '#FFDF00';
+  ctx.font      = `900 ${Math.round(30*S)}px Poppins, "Arial Black", Arial`;
+  ctx.fillText('2026', CW - hPad, Math.round(18*S));
+
+  // ── 2. BANDA DOURADA SUPERIOR ─────────────────────────────
+  ctx.fillStyle = bandGrad();
+  ctx.fillRect(0, HD, CW, BH);
+
+  // ── 3. PHOTO ZONE ─────────────────────────────────────────
+  // Fundo azul radial
+  const bg = ctx.createRadialGradient(CW/2, PZY+PZH*1.1, 0, CW/2, PZY+PZH*0.9, PZH*1.2);
+  bg.addColorStop(0,   '#001F6B');
+  bg.addColorStop(0.4, '#002776');
+  bg.addColorStop(1,   '#001240');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, PZY, CW, PZH);
+
+  // Raios sunburst (focal abaixo da zona, clippado)
+  drawSunburst(CW / 2, PZY + Math.round(310 * S));
+
+  // Banda "Ordem e Progresso" diagonal
+  ctx.save();
+  ctx.translate(CW/2, PZY + Math.round(150*S));
+  ctx.rotate(-6 * Math.PI / 180);
+  ctx.fillStyle = 'rgba(0,39,118,0.22)';
+  ctx.fillRect(-Math.round(170*S), -Math.round(9*S), Math.round(340*S), Math.round(18*S));
+  ctx.fillStyle    = 'rgba(255,223,0,0.22)';
+  ctx.font         = `700 ${Math.round(7*S)}px Poppins, Arial`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('ORDEM E PROGRESSO', 0, 0);
+  ctx.restore();
+
+  // Losango outline
+  ctx.strokeStyle = 'rgba(255,223,0,0.10)';
+  ctx.lineWidth   = Math.round(1.5*S);
+  ctx.beginPath();
+  ctx.moveTo(Math.round(200*S), PZY + Math.round(8*S));
+  ctx.lineTo(Math.round(390*S), PZY + Math.round(150*S));
+  ctx.lineTo(Math.round(200*S), PZY + Math.round(292*S));
+  ctx.lineTo(Math.round(10*S),  PZY + Math.round(150*S));
+  ctx.closePath();
+  ctx.stroke();
+
+  // Anéis circulares
+  drawRing(CW/2, PZY+PZH-Math.round(100*S), Math.round(180*S), 'rgba(255,223,0,0.08)');
+  drawRing(CW/2, PZY+PZH-Math.round(60*S),  Math.round(130*S), 'rgba(255,223,0,0.06)');
+  drawRing(CW/2, PZY+PZH-Math.round(20*S),  Math.round(80*S),  'rgba(255,223,0,0.05)');
+
+  // Estrelas decorativas
+  drawPhotoStars();
+
+  // Ground glow
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,223,0,0.4)';
+  ctx.shadowBlur  = Math.round(16*S);
+  ctx.fillStyle   = 'rgba(255,223,0,0.15)';
+  ctx.fillRect(CW/2 - Math.round(140*S), PZY+PZH-Math.round(38*S), Math.round(280*S), Math.round(18*S));
+  ctx.restore();
+
+  // Faixa de grama
+  const grassH = Math.round(24 * S);
+  const gGrad  = ctx.createLinearGradient(0, PZY+PZH-grassH, 0, PZY+PZH);
+  gGrad.addColorStop(0,   'rgba(0,0,0,0)');
+  gGrad.addColorStop(0.6, 'rgba(0,80,0,0.7)');
+  gGrad.addColorStop(1,   '#004810');
+  ctx.fillStyle = gGrad;
+  ctx.fillRect(0, PZY+PZH-grassH, CW, grassH);
+  ctx.fillStyle = 'rgba(255,223,0,0.25)';
+  ctx.fillRect(0, PZY+PZH-grassH, CW, 1);
+
+  // Pessoa segmentada ou placeholder
   if (personSrc) {
     ctx.save();
-    ctx.clip(rrPath(0, 0, CW, CH));
-    ctx.drawImage(personSrc, 0, 0);
+    ctx.beginPath();
+    ctx.rect(0, PZY, CW, PZH);
+    ctx.clip();
+    ctx.filter = 'blur(1.5px)';
+    ctx.drawImage(personSrc, 0, PZY);
+    ctx.filter = 'none';
     ctx.restore();
+  } else {
+    ctx.fillStyle = 'rgba(255,223,0,0.3)';
+    const phCX = CW / 2;
+    ctx.beginPath();
+    ctx.arc(phCX, PZY + Math.round(80*S), Math.round(34*S), 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(phCX, PZY+PZH-Math.round(28*S), Math.round(80*S), Math.PI, 0);
+    ctx.fill();
   }
 
-  // 3 ── Left dark scrim (behind logo + name) ────────────────
-  ctx.save();
-  ctx.clip(rrPath(0, 0, CW, CH));
-  const ls = ctx.createLinearGradient(0, 0, 85, 0);
-  ls.addColorStop(0, 'rgba(0,0,0,0.80)');
-  ls.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = ls;
-  ctx.fillRect(0, 0, CW, CH);
+  // Cantos da photo zone
+  drawCornerBracket(Math.round(10*S),    PZY + Math.round(10*S), 'tl');
+  drawCornerBracket(CW-Math.round(10*S), PZY + Math.round(10*S), 'tr');
 
-  // Bottom scrim (behind footer text)
-  const bs = ctx.createLinearGradient(0, CH * 0.72, 0, CH);
-  bs.addColorStop(0, 'rgba(0,0,0,0)');
-  bs.addColorStop(1, 'rgba(0,0,0,0.82)');
-  ctx.fillStyle = bs;
-  ctx.fillRect(0, 0, CW, CH);
-  ctx.restore();
+  // ── 4. BANDA DOURADA INFERIOR ─────────────────────────────
+  ctx.fillStyle = bandGrad();
+  ctx.fillRect(0, PZY+PZH, CW, BH);
 
-  // 4 ── FIFA 2026 logo block (top-left) ─────────────────────
-  drawFifaLogo(10, 10, 58, 72);
+  // ── 5. SEÇÃO INFO ─────────────────────────────────────────
+  ctx.fillStyle = '#009C3B';
+  ctx.fillRect(0, IY, CW, CH - IY);
 
-  // 5 ── Player name — vertical, left edge ───────────────────
-  ctx.save();
-  ctx.translate(37, CH - 32);
-  ctx.rotate(-Math.PI / 2);
-  ctx.font        = `800 23px 'Segoe UI', Arial`;
-  ctx.fillStyle   = '#fff';
-  ctx.textAlign   = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.95)';
-  ctx.shadowBlur  = 7;
-  ctx.fillText(`${name}  (${country})`, 0, 0);
-  ctx.restore();
+  const inPad = Math.round(18 * S);
 
-  // 6 ── Footer text ──────────────────────────────────────────
-  ctx.save();
-  ctx.font        = 'bold 11px "Courier New", monospace';
-  ctx.shadowBlur  = 0;
-  ctx.fillStyle   = 'rgba(255,255,255,0.5)';
-  ctx.textAlign   = 'right';
+  // Ghost "BRASIL"
+  ctx.fillStyle    = 'rgba(0,80,20,0.35)';
+  ctx.font         = `900 ${Math.round(64*S)}px Poppins, "Arial Black", Arial`;
+  ctx.textAlign    = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText('BRASIL', CW + Math.round(8*S), IY - Math.round(2*S));
+
+  // Ghost número camisa
+  ctx.fillStyle    = 'rgba(0,80,20,0.28)';
+  ctx.font         = `900 ${Math.round(88*S)}px Poppins, "Arial Black", Arial`;
+  ctx.textAlign    = 'left';
   ctx.textBaseline = 'bottom';
-  ctx.fillText('FIFA WORLD CUP 2026™', CW - 12, CH - 11);
-  ctx.fillStyle  = 'rgba(255,255,255,0.28)';
-  ctx.textAlign  = 'left';
-  ctx.fillText('PANINI', 12, CH - 11);
-  ctx.restore();
+  ctx.fillText(numero, Math.round(14*S), CH - BSH - Math.round(44*S));
 
-  // 7 ── White inset border ───────────────────────────────────
+  // Nome do colaborador (max 2 linhas)
+  ctx.fillStyle    = '#FFDF00';
+  ctx.font         = `900 ${Math.round(26*S)}px Poppins, "Arial Black", Arial`;
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'top';
+  ctx.shadowColor  = 'rgba(0,0,0,0.2)';
+  ctx.shadowBlur   = Math.round(8*S);
+
+  const words  = name.split(' ');
+  const mid    = Math.ceil(words.length / 2);
+  const line1  = words.slice(0, mid).join(' ');
+  const line2  = words.slice(mid).join(' ');
+  const lhPx   = Math.round(26*S * 1.05);
+  const nameY  = IY + Math.round(14*S);
+  ctx.fillText(line1, inPad, nameY);
+  if (line2) ctx.fillText(line2, inPad, nameY + lhPx);
+  ctx.shadowBlur = 0;
+
+  // Tick line
+  const linesUsed = line2 ? 2 : 1;
+  const tickY = nameY + linesUsed * lhPx + Math.round(8*S);
+  ctx.fillStyle = 'rgba(255,223,0,0.5)';
+  ctx.fillRect(inPad, tickY, Math.round(32*S), Math.round(3*S));
+
+  // Cargo · Departamento
+  const roleLineH = Math.round(12*S * 1.55);
+  const roleY     = tickY + Math.round(3*S) + Math.round(6*S);
+  ctx.fillStyle    = 'rgba(255,255,255,0.85)';
+  ctx.font         = `${Math.round(12*S)}px Poppins, Arial`;
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${cargo} · ${depto}`, inPad, roleY);
+  ctx.fillText('Hands On Tecnologia · São Paulo', inPad, roleY + roleLineH);
+
+  // ── 6. BRAND STRIP ────────────────────────────────────────
+  const BSY = CH - BSH;
+  ctx.fillStyle = '#005C1F';
+  ctx.fillRect(0, BSY, CW, BSH);
+  ctx.fillStyle = 'rgba(255,223,0,0.2)';
+  ctx.fillRect(0, BSY, CW, 1);
+
+  ctx.fillStyle    = 'rgba(255,255,255,0.45)';
+  ctx.font         = `700 ${Math.round(11*S)}px Poppins, Arial`;
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('HANDS ON', Math.round(16*S), BSY + BSH/2);
+
+  ctx.fillStyle = '#FF245C';
+  ctx.font      = `700 ${Math.round(12*S)}px "JetBrains Mono", "Courier New", monospace`;
+  ctx.fillText('>>>', Math.round(16*S) + Math.round(74*S), BSY + BSH/2);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font      = `600 ${Math.round(7*S)}px Poppins, Arial`;
+  ctx.fillText('ORDEM E PROGRESSO', CW - Math.round(16*S), BSY + BSH/2 - Math.round(5*S));
+  ctx.fillStyle = 'rgba(255,223,0,0.3)';
+  ctx.fillText('USA · MEX · CAN · 2026', CW - Math.round(16*S), BSY + BSH/2 + Math.round(5*S));
+
+  ctx.restore(); // desfaz clip do card
+
+  // Borda branca interna
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.42)';
   ctx.lineWidth   = 2.5;
@@ -409,76 +777,39 @@ function renderCard(personSrc) {
   ctx.restore();
 }
 
-// ── FIFA 2026 logo (drawn with canvas paths) ─────────────────
-function drawFifaLogo(x, y, w, h) {
-  ctx.save();
+// ── Cache localStorage (TTL 1 dia) ───────────────────────────
+const CACHE_KEY = 'figurinha_copa2026';
+const CACHE_TTL = 86_400_000; // 1 dia em ms
 
-  // Dark rounded background
-  ctx.fillStyle = 'rgba(10,10,14,0.90)';
-  const bg = new Path2D();
-  bg.roundRect(x, y, w, h, 7);
-  ctx.fill(bg);
-
-  const mx = x + w / 2;
-  const s  = w * 0.24;        // size unit
-  const ty = y + h * 0.40;   // trophy center y
-
-  ctx.fillStyle   = '#fff';
-  ctx.strokeStyle = '#fff';
-
-  // Trophy cup bowl
-  ctx.beginPath();
-  ctx.arc(mx, ty, s, Math.PI, 0);
-  ctx.lineTo(mx + s * 0.55, ty + s * 0.78);
-  ctx.lineTo(mx + s * 0.85, ty + s * 0.78);
-  ctx.lineTo(mx + s * 0.85, ty + s * 1.02);
-  ctx.lineTo(mx - s * 0.85, ty + s * 1.02);
-  ctx.lineTo(mx - s * 0.85, ty + s * 0.78);
-  ctx.lineTo(mx - s * 0.55, ty + s * 0.78);
-  ctx.closePath();
-  ctx.fill();
-
-  // Left handle
-  ctx.lineWidth = s * 0.28;
-  ctx.beginPath();
-  ctx.arc(mx - s, ty - s * 0.22, s * 0.38, Math.PI * 0.5, Math.PI * 1.5);
-  ctx.stroke();
-
-  // Right handle
-  ctx.beginPath();
-  ctx.arc(mx + s, ty - s * 0.22, s * 0.38, -Math.PI * 0.5, Math.PI * 0.5);
-  ctx.stroke();
-
-  // Star above trophy
-  drawStar(mx, ty - s * 1.55, 5, s * 0.24, s * 0.1);
-
-  // "FIFA" label
-  ctx.shadowBlur   = 0;
-  ctx.font         = `700 ${Math.round(w * 0.19)}px 'Segoe UI', Arial`;
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText('FIFA', mx, y + h - 5);
-
-  ctx.restore();
+function saveCache() {
+  const data = {
+    ts:     Date.now(),
+    name:   nameInput.value,
+    number: numInput.value,
+    cargo:  cargoInput.value,
+    depto:  deptoInput.value,
+  };
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch {}
 }
 
-function drawStar(cx, cy, n, ro, ri) {
-  ctx.beginPath();
-  for (let i = 0; i < n * 2; i++) {
-    const r  = i % 2 === 0 ? ro : ri;
-    const an = (i * Math.PI) / n - Math.PI / 2;
-    ctx.lineTo(cx + Math.cos(an) * r, cy + Math.sin(an) * r);
-  }
-  ctx.closePath();
-  ctx.fillStyle = '#fff';
-  ctx.fill();
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (Date.now() - data.ts > CACHE_TTL) { localStorage.removeItem(CACHE_KEY); return; }
+    if (data.name   !== undefined) nameInput.value  = data.name;
+    if (data.number !== undefined) numInput.value   = data.number;
+    if (data.cargo  !== undefined) cargoInput.value = data.cargo;
+    if (data.depto  !== undefined) deptoInput.value = data.depto;
+  } catch {}
 }
 
-// ── Events ───────────────────────────────────────────────────
+// ── Eventos ──────────────────────────────────────────────────
 btnStart.addEventListener('click', async () => {
   try {
     status.textContent = 'Acessando câmera…';
-    await startCamera();
+    await initCamera();
   } catch (e) {
     status.className   = 'err';
     status.textContent = 'Erro câmera: ' + e.message;
@@ -486,6 +817,15 @@ btnStart.addEventListener('click', async () => {
 });
 
 btnStop.addEventListener('click', stopCamera);
+
+btnFlip.addEventListener('click', async () => {
+  try {
+    await flipCamera();
+  } catch (e) {
+    status.className   = 'err';
+    status.textContent = 'Erro ao trocar câmera: ' + e.message;
+  }
+});
 
 btnDl.addEventListener('click', () => {
   const a    = document.createElement('a');
@@ -495,18 +835,13 @@ btnDl.addEventListener('click', () => {
   a.click();
 });
 
-ccInput.addEventListener('input', () => {
-  syncCSSVar();
-  if (!running) renderCard(null);
-});
-
-nameInput.addEventListener('input', () => {
-  if (!running) renderCard(null);
-});
+[nameInput, numInput, cargoInput, deptoInput].forEach(el =>
+  el.addEventListener('input', () => { saveCache(); if (!running) renderCard(null); })
+);
 
 // ── Init ─────────────────────────────────────────────────────
-syncCSSVar();
-renderCard(null);
+loadCache();
+document.fonts.ready.then(() => renderCard(null));
 
 loadModel().catch(e => {
   status.className   = 'err';
