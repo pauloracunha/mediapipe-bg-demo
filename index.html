@@ -226,6 +226,10 @@ pCanvas.width  = CW;
 pCanvas.height = PZH;
 const pCtx = pCanvas.getContext('2d');
 
+// Canvas da máscara (tamanho do output do MediaPipe, redimensionado por drawImage no GPU)
+const mCanvas = document.createElement('canvas');
+const mCtx    = mCanvas.getContext('2d');
+
 // ── Model ────────────────────────────────────────────────────
 async function loadModel() {
   status.className   = 'loading';
@@ -325,22 +329,21 @@ function loop(ts) {
   if (!running) return;
   if (video.readyState < 2) { requestAnimationFrame(loop); return; }
 
-  const vW  = video.videoWidth;
-  const vH  = video.videoHeight;
-  const thr = parseInt(thrInput.value) / 100;
+  const vW      = video.videoWidth;
+  const vH      = video.videoHeight;
+  const thr     = parseInt(thrInput.value)     / 100;
+  const feather = parseInt(featherInput.value) / 100;
+  const tempW   = parseInt(temporalInput.value) / 100;
 
-  // Cover: escala mantendo aspect ratio e corta excesso central (portrait ou landscape)
+  // Cover crop — funciona portrait e landscape
   const srcScale = Math.min(vW / CW, vH / PZH);
   const srcW     = CW  * srcScale;
   const srcH     = PZH * srcScale;
   const cropX    = (vW - srcW) / 2;
   const cropY    = (vH - srcH) / 2;
 
+  // Copia frame da câmera (GPU→GPU, sem readback de pixels)
   vCtx.drawImage(video, 0, 0);
-  const vFrame = vCtx.getImageData(0, 0, vW, vH).data;
-
-  const feather = parseInt(featherInput.value) / 100;
-  const tempW   = parseInt(temporalInput.value) / 100;
 
   try {
     segmenter.segmentForVideo(video, ts, (result) => {
@@ -353,7 +356,7 @@ function loop(ts) {
       const maskSize = maskW * maskH;
       const rawMask  = mask.getAsFloat32Array();
 
-      // Temporal smoothing
+      // Temporal smoothing (roda na máscara pequena, não no frame)
       if (!workMask || workMask.length !== maskSize) {
         workMask = new Float32Array(maskSize);
         prevMask = null;
@@ -367,56 +370,44 @@ function loop(ts) {
       if (!prevMask) prevMask = new Float32Array(maskSize);
       prevMask.set(workMask);
 
-      // Monta RGBA só para a photo zone (CW × PZH)
-      const imgData = new ImageData(CW, PZH);
-      const d       = imgData.data;
-
-      for (let cy = 0; cy < PZH; cy++) {
-        for (let cx = 0; cx < CW; cx++) {
-          const vx = Math.min(vW - 1, cropX + (CW - 1 - cx) * srcScale); // mirror
-          const vy = Math.min(vH - 1, cropY + cy * srcScale);
-
-          // Interpolação bilinear da máscara
-          const mxf = (vx / vW) * maskW, myf = (vy / vH) * maskH;
-          const mx0 = Math.floor(mxf), my0 = Math.floor(myf);
-          const mx1 = Math.min(maskW-1, mx0+1), my1 = Math.min(maskH-1, my0+1);
-          const fxr = mxf - mx0, fyr = myf - my0;
-          const conf = workMask[my0*maskW+mx0] * (1-fxr) * (1-fyr)
-                     + workMask[my0*maskW+mx1] *    fxr  * (1-fyr)
-                     + workMask[my1*maskW+mx0] * (1-fxr) *    fyr
-                     + workMask[my1*maskW+mx1] *    fxr  *    fyr;
-
-          if (conf > thr) {
-            const ivx = Math.min(vW-1, Math.round(vx));
-            const ivy = Math.min(vH-1, Math.round(vy));
-            const vi  = (ivy * vW + ivx) * 4;
-            const pi  = (cy  * CW + cx)  * 4;
-            const alpha = Math.min(1, (conf - thr) / feather);
-            d[pi]   = vFrame[vi];
-            d[pi+1] = vFrame[vi+1];
-            d[pi+2] = vFrame[vi+2];
-            d[pi+3] = Math.round(alpha * 255);
-          }
-        }
+      // Converte máscara em ImageData alpha-only (maskW×maskH — loop pequeno ~36k)
+      // R=G=B=255, A = confiança mapeada para 0-255 com threshold e feather
+      if (mCanvas.width !== maskW || mCanvas.height !== maskH) {
+        mCanvas.width = maskW; mCanvas.height = maskH;
       }
+      const maskImgData  = new ImageData(maskW, maskH);
+      const md           = maskImgData.data;
+      const featherInv   = feather > 0 ? 1 / feather : 255;
+      let   personDetected = false;
 
-      // Verifica se algum pixel da máscara indica presença de pessoa (limiar baixo)
-      let personDetected = false;
       for (let i = 0; i < maskSize; i++) {
-        if (workMask[i] > 0.05) { personDetected = true; break; }
+        const v = workMask[i];
+        if (v > 0.05) personDetected = true;
+        const a = v <= thr ? 0 : Math.min(255, Math.round((v - thr) * featherInv * 255));
+        const p = i * 4;
+        md[p] = md[p+1] = md[p+2] = 255;
+        md[p+3] = a;
       }
+      mCtx.putImageData(maskImgData, 0, 0);
 
+      // ── Compositing no GPU ────────────────────────────────
       pCtx.clearRect(0, 0, CW, PZH);
+
+      // Frame espelhado da câmera → pCanvas
+      pCtx.save();
+      pCtx.translate(CW, 0);
+      pCtx.scale(-1, 1);
+      pCtx.drawImage(vCanvas, cropX, cropY, srcW, srcH, 0, 0, CW, PZH);
+      pCtx.restore();
+
       if (personDetected) {
-        pCtx.putImageData(imgData, 0, 0);
-      } else {
-        // Sem perfil detectado — exibe frame completo da câmera (espelhado)
-        pCtx.save();
-        pCtx.translate(CW, 0);
-        pCtx.scale(-1, 1);
-        pCtx.drawImage(vCanvas, cropX, cropY, srcW, srcH, 0, 0, CW, PZH);
-        pCtx.restore();
+        // destination-in: mantém pixels do frame onde a máscara é opaca, apaga o resto
+        pCtx.globalCompositeOperation = 'destination-in';
+        pCtx.drawImage(mCanvas, 0, 0, CW, PZH); // GPU faz resize + apply
+        pCtx.globalCompositeOperation = 'source-over';
       }
+      // sem pessoa: pCanvas já tem o frame completo — usa direto
+
       renderCard(pCanvas);
 
       if (lastTs > 0) {
