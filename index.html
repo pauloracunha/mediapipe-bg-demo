@@ -153,7 +153,7 @@
 </head>
 <body>
 
-<h1>Figurinha <em>Copa do Mundo 2026™</em> <span id="appVersion" style="font-size:0.55rem;font-weight:400;color:#444;letter-spacing:0">v0.9.2</span></h1>
+<h1>Figurinha <em>Copa do Mundo 2026™</em> <span id="appVersion" style="font-size:0.55rem;font-weight:400;color:#444;letter-spacing:0">v0.9.3</span></h1>
 
 <div class="controls">
   <!-- identidade -->
@@ -409,11 +409,19 @@ function loop(ts) {
   vCtx.drawImage(video, 0, 0);
 
   try {
-    // API síncrona — segment() retorna o resultado direto (não aceita callback)
-    const result = segmenter.segment(vCanvas);
+    // API síncrona — testa ambas as fontes; vCanvas pode estar em branco no iOS
+    const result = segmenter.segment(video);
 
     _dbgFrameCount++;
     if (_dbgFrameCount === 1) {
+      // Verifica se vCanvas tem pixels reais (não está em branco)
+      try {
+        const cx = Math.floor(vW / 2), cy = Math.floor(vH / 2);
+        const px = vCtx.getImageData(cx, cy, 1, 1).data;
+        dbg(`vCanvas pixel central: rgb(${px[0]},${px[1]},${px[2]}) a=${px[3]}`, px[3] === 0 ? 'warn' : 'info');
+        const px2 = vCtx.getImageData(10, 10, 1, 1).data;
+        dbg(`vCanvas px(10,10): rgb(${px2[0]},${px2[1]},${px2[2]}) a=${px2[3]}`, 'info');
+      } catch(e) { dbg('getImageData erro: ' + e.message, 'err'); }
       dbg(`1º frame — vídeo ${vW}×${vH} canvas ${vCanvas.width}×${vCanvas.height}`, 'info');
       // inspeciona estrutura do result
       const keys = Object.keys(result).join(',');
