@@ -462,9 +462,15 @@ function loop(ts) {
         md[p+3] = a;
       }
 
-      // Log max da máscara nos primeiros frames e a cada 5s (~150 frames)
+      // Log detalhado nos primeiros frames e a cada 5s (~150 frames)
       if (_dbgFrameCount <= 5 || _dbgFrameCount % 150 === 0) {
-        dbg(`frame ${_dbgFrameCount}: maskMax=${maskMax.toFixed(3)} thr=${thr.toFixed(2)} person=${personDetected}`,
+        const cx  = Math.floor(maskW / 2), cy = Math.floor(maskH / 2);
+        const ctr = workMask[cy * maskW + cx];
+        let   maskMin = Infinity;
+        for (let i = 0; i < maskSize; i++) if (workMask[i] < maskMin) maskMin = workMask[i];
+        dbg(`frame ${_dbgFrameCount}: masks.len=${masks.length} size=${maskW}×${maskH}` +
+            ` min=${maskMin.toFixed(3)} max=${maskMax.toFixed(3)} center=${ctr.toFixed(3)}` +
+            ` thr=${thr.toFixed(2)} person=${personDetected}`,
           maskMax < 0.05 ? 'warn' : 'info');
       }
 
