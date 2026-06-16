@@ -406,11 +406,12 @@ function loop(ts) {
   const cropX    = (vW - srcW) / 2;
   const cropY    = (vH - srcH) / 2;
 
-  // Copia frame da câmera (GPU→GPU, sem readback de pixels)
+  // Copia frame para vCanvas — usado tanto como fonte do segmentador quanto do compositing
   vCtx.drawImage(video, 0, 0);
 
   try {
-    segmenter.segmentForVideo(video, ts, (result) => {
+    // Passa vCanvas em vez de video: iOS/Safari não permite leitura direta do HTMLVideoElement
+    segmenter.segmentForVideo(vCanvas, ts, (result) => {
       _dbgFrameCount++;
       if (_dbgFrameCount === 1) dbg(`1º callback — vídeo ${vW}×${vH}`, 'info');
 
