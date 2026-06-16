@@ -321,11 +321,12 @@ function loop(ts) {
   const vH  = video.videoHeight;
   const thr = parseInt(thrInput.value) / 100;
 
-  // Crop central portrait para ratio CW:PZH
-  const cropW  = Math.round(vH * (CW / PZH));
-  const cropX  = Math.round((vW - cropW) / 2);
-  const scaleX = cropW / CW;
-  const scaleY = vH   / PZH;
+  // Cover: escala mantendo aspect ratio e corta excesso central (portrait ou landscape)
+  const srcScale = Math.min(vW / CW, vH / PZH);
+  const srcW     = CW  * srcScale;
+  const srcH     = PZH * srcScale;
+  const cropX    = (vW - srcW) / 2;
+  const cropY    = (vH - srcH) / 2;
 
   vCtx.drawImage(video, 0, 0);
   const vFrame = vCtx.getImageData(0, 0, vW, vH).data;
@@ -364,8 +365,8 @@ function loop(ts) {
 
       for (let cy = 0; cy < PZH; cy++) {
         for (let cx = 0; cx < CW; cx++) {
-          const vx = Math.min(vW - 1, cropX + (CW - 1 - cx) * scaleX); // mirror
-          const vy = Math.min(vH - 1, cy * scaleY);
+          const vx = Math.min(vW - 1, cropX + (CW - 1 - cx) * srcScale); // mirror
+          const vy = Math.min(vH - 1, cropY + cy * srcScale);
 
           // Interpolação bilinear da máscara
           const mxf = (vx / vW) * maskW, myf = (vy / vH) * maskH;
@@ -405,7 +406,7 @@ function loop(ts) {
         pCtx.save();
         pCtx.translate(CW, 0);
         pCtx.scale(-1, 1);
-        pCtx.drawImage(vCanvas, cropX, 0, cropW, vH, 0, 0, CW, PZH);
+        pCtx.drawImage(vCanvas, cropX, cropY, srcW, srcH, 0, 0, CW, PZH);
         pCtx.restore();
       }
       renderCard(pCanvas);
