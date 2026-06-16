@@ -153,7 +153,7 @@
 </head>
 <body>
 
-<h1>Figurinha <em>Copa do Mundo 2026™</em> <span id="appVersion" style="font-size:0.55rem;font-weight:400;color:#444;letter-spacing:0">v0.9.1</span></h1>
+<h1>Figurinha <em>Copa do Mundo 2026™</em> <span id="appVersion" style="font-size:0.55rem;font-weight:400;color:#444;letter-spacing:0">v0.9.2</span></h1>
 
 <div class="controls">
   <!-- identidade -->
@@ -300,7 +300,7 @@ async function loadModel() {
         'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
     },
     runningMode: 'IMAGE',
-    outputCategoryMask: false,
+    outputCategoryMask: true,
     outputConfidenceMasks: true,
   };
   // Tenta GPU; fallback CPU para mobile onde GPU WebGL pode falhar
@@ -413,12 +413,24 @@ function loop(ts) {
     const result = segmenter.segment(vCanvas);
 
     _dbgFrameCount++;
-    if (_dbgFrameCount === 1) dbg(`1º frame — vídeo ${vW}×${vH}`, 'info');
+    if (_dbgFrameCount === 1) {
+      dbg(`1º frame — vídeo ${vW}×${vH} canvas ${vCanvas.width}×${vCanvas.height}`, 'info');
+      // inspeciona estrutura do result
+      const keys = Object.keys(result).join(',');
+      const hasCat  = result.categoryMask != null;
+      const hasConf = result.confidenceMasks?.length > 0;
+      dbg(`result keys=${keys} hasCat=${hasCat} hasConf=${hasConf}`, 'info');
+      if (hasCat) {
+        const cm = result.categoryMask;
+        const arr = cm.getAsUint8Array?.() ?? cm.getAsFloat32Array?.();
+        dbg(`categoryMask ${cm.width}×${cm.height} sample[0]=${arr?.[0]} sample[mid]=${arr?.[Math.floor(arr.length/2)]}`, 'info');
+      }
+    }
 
     const masks = result.confidenceMasks;
     if (!masks?.length) {
       if (_dbgFrameCount <= 5 || _dbgFrameCount % 60 === 0)
-        dbg(`frame ${_dbgFrameCount}: confidenceMasks vazio`, 'warn');
+        dbg(`frame ${_dbgFrameCount}: confidenceMasks vazio. categoryMask=${result.categoryMask != null}`, 'warn');
       result.close();
       requestAnimationFrame(loop); return;
     }
@@ -428,6 +440,12 @@ function loop(ts) {
     const maskH    = mask.height;
     const maskSize = maskW * maskH;
     const rawMask  = mask.getAsFloat32Array();
+
+    if (_dbgFrameCount <= 3) {
+      let rMax = 0;
+      for (let i = 0; i < rawMask.length; i++) if (rawMask[i] > rMax) rMax = rawMask[i];
+      dbg(`rawMask ${maskW}×${maskH} len=${rawMask.length} rMax=${rMax.toFixed(3)} mid=${rawMask[Math.floor(rawMask.length/2)].toFixed(3)}`, rMax < 0.05 ? 'warn' : 'info');
+    }
 
     // Temporal smoothing
     if (!workMask || workMask.length !== maskSize) {
