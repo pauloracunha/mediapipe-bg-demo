@@ -234,16 +234,24 @@ async function loadModel() {
     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
   );
   status.textContent = 'Baixando modelo…';
-  segmenter = await ImageSegmenter.createFromOptions(vision, {
+  const modelOpts = {
     baseOptions: {
       modelAssetPath:
         'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
-      delegate: 'GPU',
     },
     runningMode: 'VIDEO',
     outputCategoryMask: false,
     outputConfidenceMasks: true,
-  });
+  };
+  // Tenta GPU; fallback CPU para mobile onde GPU WebGL pode falhar
+  try {
+    segmenter = await ImageSegmenter.createFromOptions(vision,
+      { ...modelOpts, baseOptions: { ...modelOpts.baseOptions, delegate: 'GPU' } });
+  } catch {
+    status.textContent = 'GPU indisponível, usando CPU…';
+    segmenter = await ImageSegmenter.createFromOptions(vision,
+      { ...modelOpts, baseOptions: { ...modelOpts.baseOptions, delegate: 'CPU' } });
+  }
   status.className   = 'ok';
   status.textContent = 'Modelo pronto. Clique em Câmera.';
   btnStart.disabled  = false;
@@ -392,10 +400,10 @@ function loop(ts) {
         }
       }
 
-      // Verifica se algum pixel da máscara indica presença de pessoa
+      // Verifica se algum pixel da máscara indica presença de pessoa (limiar baixo)
       let personDetected = false;
       for (let i = 0; i < maskSize; i++) {
-        if (workMask[i] > 0.15) { personDetected = true; break; }
+        if (workMask[i] > 0.05) { personDetected = true; break; }
       }
 
       pCtx.clearRect(0, 0, CW, PZH);
@@ -682,9 +690,7 @@ function renderCard(personSrc) {
     ctx.beginPath();
     ctx.rect(0, PZY, CW, PZH);
     ctx.clip();
-    ctx.filter = 'blur(1.5px)';
     ctx.drawImage(personSrc, 0, PZY);
-    ctx.filter = 'none';
     ctx.restore();
   } else {
     ctx.fillStyle = 'rgba(255,223,0,0.3)';
