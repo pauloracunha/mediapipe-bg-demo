@@ -153,7 +153,7 @@
 </head>
 <body>
 
-<h1>Figurinha <em>Copa do Mundo 2026™</em> <span id="appVersion" style="font-size:0.55rem;font-weight:400;color:#444;letter-spacing:0">v0.9.5</span></h1>
+<h1>Figurinha <em>Copa do Mundo 2026™</em> <span id="appVersion" style="font-size:0.55rem;font-weight:400;color:#444;letter-spacing:0">v0.9.6</span></h1>
 
 <div class="controls">
   <!-- identidade -->
@@ -220,6 +220,7 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
 
 // ── Debug overlay ────────────────────────────────────────────
+const DEBUG      = new URLSearchParams(location.search).has('debug');
 const debugLog   = document.getElementById('debugLog');
 const debugLines = document.getElementById('debugLines');
 document.getElementById('debugClose').onclick = () => { debugLog.style.display = 'none'; };
@@ -227,26 +228,20 @@ document.getElementById('debugClose').onclick = () => { debugLog.style.display =
 let _dbgFrameCount = 0;
 function dbg(msg, level = 'info') {
   console[level === 'err' ? 'error' : level === 'warn' ? 'warn' : 'log']('[dbg]', msg);
+  if (!DEBUG) return;
   debugLog.style.display = 'block';
   const line = document.createElement('div');
   line.className = `dbg-${level}`;
   const ts = new Date().toTimeString().slice(0, 8);
   line.textContent = `[${ts}] ${msg}`;
   debugLines.appendChild(line);
-  // mantém últimas 60 linhas
   while (debugLines.children.length > 60) debugLines.firstChild.remove();
   debugLog.scrollTop = debugLog.scrollHeight;
 }
 
 // ── Layout constants (base 400×560, escala 1.2 → 480×672) ────
 const CW  = 480, CH = 672;
-const S   = CW / 400;                         // 1.2
-const HD  = Math.round(60  * S);              // header h   = 72
-const BH  = Math.round(12  * S);              // band h     = 14
-const PZY = HD + BH;                          // photo y    = 86
-const PZH = Math.round(300 * S);              // photo h    = 360
-const BSH = Math.round(36  * S);              // brand-strip h = 43
-const IY  = PZY + PZH + BH;                  // info y     = 460
+const S = CW / 400; // 1.2
 
 // ── DOM ──────────────────────────────────────────────────────
 const video         = document.getElementById('video');
@@ -276,10 +271,10 @@ let workMask = null, prevMask = null;
 const vCanvas = document.createElement('canvas');
 const vCtx    = vCanvas.getContext('2d', { willReadFrequently: true });
 
-// Pessoa ocupa só a photo zone (480 × 360)
+// Pessoa full-bleed (480 × 672)
 const pCanvas = document.createElement('canvas');
 pCanvas.width  = CW;
-pCanvas.height = PZH;
+pCanvas.height = CH;
 const pCtx = pCanvas.getContext('2d');
 
 // Canvas da máscara (tamanho do output do MediaPipe, redimensionado por drawImage no GPU)
@@ -391,10 +386,10 @@ function loop(ts) {
   const feather = parseInt(featherInput.value) / 100;
   const tempW   = parseInt(temporalInput.value) / 100;
 
-  // Cover crop — portrait e landscape
-  const srcScale = Math.min(vW / CW, vH / PZH);
-  const srcW     = CW  * srcScale;
-  const srcH     = PZH * srcScale;
+  // Cover crop — portrait e landscape, full card
+  const srcScale = Math.min(vW / CW, vH / CH);
+  const srcW     = CW * srcScale;
+  const srcH     = CH * srcScale;
   const cropX    = (vW - srcW) / 2;
   const cropY    = (vH - srcH) / 2;
 
@@ -495,21 +490,21 @@ function loop(ts) {
 
     mCtx.putImageData(maskImgData, 0, 0);
 
-    // Compositing GPU
-    pCtx.clearRect(0, 0, CW, PZH);
+    // Compositing GPU — full-bleed
+    pCtx.clearRect(0, 0, CW, CH);
     pCtx.save();
     pCtx.translate(CW, 0);
     pCtx.scale(-1, 1);
-    pCtx.drawImage(vCanvas, cropX, cropY, srcW, srcH, 0, 0, CW, PZH);
+    pCtx.drawImage(vCanvas, cropX, cropY, srcW, srcH, 0, 0, CW, CH);
     pCtx.restore();
 
     if (personDetected) {
-      // Máscara está em coordenadas do vídeo (vW×vH) — aplicar mesmo crop do frame
+      // Máscara em coordenadas do vídeo — mesmo crop do frame
       pCtx.globalCompositeOperation = 'destination-in';
       pCtx.save();
       pCtx.translate(CW, 0);
       pCtx.scale(-1, 1);
-      pCtx.drawImage(mCanvas, cropX, cropY, srcW, srcH, 0, 0, CW, PZH);
+      pCtx.drawImage(mCanvas, cropX, cropY, srcW, srcH, 0, 0, CW, CH);
       pCtx.restore();
       pCtx.globalCompositeOperation = 'source-over';
     }
@@ -554,70 +549,6 @@ function drawStarPath(cx, cy, pts, ro, ri) {
   ctx.closePath();
 }
 
-function bandGrad() {
-  const g = ctx.createLinearGradient(0, 0, CW, 0);
-  g.addColorStop(0,   '#FFB800');
-  g.addColorStop(0.3, '#FFDF00');
-  g.addColorStop(0.5, '#FFE84D');
-  g.addColorStop(0.7, '#FFDF00');
-  g.addColorStop(1,   '#FFB800');
-  return g;
-}
-
-function drawSunburst(focalX, focalAbsY) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, PZY, CW, PZH);
-  ctx.clip();
-
-  const grad = ctx.createRadialGradient(focalX, focalAbsY, 0, focalX, focalAbsY, PZH * 1.4);
-  grad.addColorStop(0,    'rgba(255,223,0,0.28)');
-  grad.addColorStop(0.55, 'rgba(255,184,0,0.10)');
-  grad.addColorStop(1,    'rgba(0,18,64,0)');
-
-  // Polígonos do SVG original (400×300) → escala S, y offset +PZY
-  const rays = [
-    [[168,0],[176,0]], [[158,0],[166,0]], [[148,0],[156,0]],
-    [[134,0],[142,0]], [[118,0],[128,0]], [[98,0],[110,0]],
-    [[74,0],[88,0]],   [[44,0],[60,0]],   [[6,0],[26,0]],
-    [[0,16],[0,42]],   [[0,80],[0,120]],  [[0,155],[0,200]],
-    [[224,0],[232,0]], [[234,0],[242,0]], [[244,0],[252,0]],
-    [[258,0],[266,0]], [[272,0],[282,0]], [[290,0],[302,0]],
-    [[312,0],[326,0]], [[340,0],[356,0]], [[374,0],[394,0]],
-    [[400,20],[400,46]], [[400,84],[400,124]], [[400,158],[400,202]],
-  ];
-
-  rays.forEach(([[x1,y1],[x2,y2]], i) => {
-    ctx.beginPath();
-    ctx.moveTo(focalX,    focalAbsY);
-    ctx.lineTo(x1*S,      PZY + y1*S);
-    ctx.lineTo(x2*S,      PZY + y2*S);
-    ctx.closePath();
-    ctx.fillStyle  = grad;
-    ctx.globalAlpha = i % 2 === 0 ? 1 : 0.6;
-    ctx.fill();
-  });
-
-  ctx.globalAlpha = 1;
-  ctx.restore();
-}
-
-function drawPhotoStars() {
-  const stars = [
-    {x:42,  y:44,  sz:13, a:.55}, {x:26,  y:78,  sz:8, a:.40},
-    {x:64,  y:96,  sz:6,  a:.35}, {x:22,  y:118, sz:7, a:.30},
-    {x:52,  y:130, sz:5,  a:.28}, {x:356, y:38,  sz:12,a:.52},
-    {x:374, y:80,  sz:7,  a:.38}, {x:338, y:104, sz:6, a:.32},
-    {x:378, y:122, sz:5,  a:.28},
-  ];
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  stars.forEach(({x, y, sz, a}) => {
-    ctx.fillStyle = `rgba(255,223,0,${a})`;
-    ctx.font      = `${Math.round(sz*S)}px Arial`;
-    ctx.fillText('★', x*S, PZY + y*S);
-  });
-}
 
 function drawRing(cx, cy, r, color) {
   ctx.strokeStyle = color;
@@ -651,27 +582,104 @@ function renderCard(personSrc) {
   ctx.save();
   ctx.clip(rrPath(0, 0, CW, CH));
 
-  const hPad = Math.round(18 * S);
+  const hPad  = Math.round(18 * S);
+  const inPad = Math.round(18 * S);
+  const TOP_H = 80;          // header overlay h
+  const BOT_H = 188;         // info panel h
+  const BSH_N = 40;          // brand strip h (dentro do BOT_H)
+  const BOT_Y = CH - BOT_H;  // 484
+  const BSY_N = CH - BSH_N;  // 632
+  const PZ_Y  = TOP_H + 4;   // foto visível começa aqui
+  const PZ_H  = BOT_Y - PZ_Y - 4; // zona visível sem overlay (~392px)
 
-  // ── 1. HEADER ─────────────────────────────────────────────
-  ctx.fillStyle = '#005C1F';
-  ctx.fillRect(0, 0, CW, HD);
+  // ── 1. Background ────────────────────────────────
+  ctx.fillStyle = '#001A0A';
+  ctx.fillRect(0, 0, CW, CH);
 
-  // Textura diagonal sutil
+  // ── 2. Elementos decorativos (atrás da pessoa) ───
+  // Anéis na base da zona de foto
   ctx.save();
-  ctx.globalAlpha = 0.025;
-  ctx.fillStyle   = '#000';
-  for (let i = -CW; i < CW * 2; i += Math.round(21 * S)) {
-    ctx.fillRect(i, 0, Math.round(S), HD);
-  }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.09;
+  drawRing(CW/2, BOT_Y - Math.round(55*S), Math.round(155*S), '#FFDF00');
+  drawRing(CW/2, BOT_Y - Math.round(30*S), Math.round(105*S), '#FFDF00');
   ctx.restore();
 
-  // Linha dourada inferior
-  ctx.fillStyle = 'rgba(255,223,0,0.6)';
-  ctx.fillRect(0, HD - 2, CW, 2);
+  // Estrelas nos cantos (evitam o centro onde fica a pessoa)
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  [
+    {cx: 42,       cy: PZ_Y + PZ_H*0.15, sz:13, a:0.40},
+    {cx: 26,       cy: PZ_Y + PZ_H*0.30, sz: 8, a:0.30},
+    {cx: 58,       cy: PZ_Y + PZ_H*0.46, sz: 6, a:0.24},
+    {cx: CW - 42,  cy: PZ_Y + PZ_H*0.13, sz:12, a:0.38},
+    {cx: CW - 27,  cy: PZ_Y + PZ_H*0.29, sz: 7, a:0.28},
+    {cx: CW - 56,  cy: PZ_Y + PZ_H*0.44, sz: 6, a:0.22},
+  ].forEach(({cx, cy, sz, a}) => {
+    ctx.fillStyle = `rgba(255,223,0,${a})`;
+    ctx.font      = `${sz}px Arial`;
+    ctx.fillText('★', cx, cy);
+  });
 
-  // Esquerda: FIFA World Cup + BRASIL + estrelas
+  // Raio diagonal dourado (sutil)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,220,0,0.09)';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(0,  BOT_Y - Math.round(80*S));
+  ctx.lineTo(CW, PZ_Y  + Math.round(80*S));
+  ctx.stroke();
+  ctx.restore();
+
+  // ── 3. Pessoa full-bleed ─────────────────────────
+  if (personSrc) {
+    ctx.drawImage(personSrc, 0, 0);
+  } else {
+    ctx.fillStyle = 'rgba(255,223,0,0.16)';
+    ctx.beginPath();
+    ctx.arc(CW/2, Math.round(220*S), Math.round(46*S), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(CW/2 - Math.round(14*S), Math.round(264*S), Math.round(28*S), Math.round(28*S));
+    ctx.beginPath();
+    ctx.arc(CW/2, Math.round(400*S), Math.round(128*S), Math.PI, 0);
+    ctx.fill();
+  }
+
+  // ── 4. Vinheta lateral (foto zone) ───────────────
+  const vigW = Math.round(52*S);
+  const vigL = ctx.createLinearGradient(0, 0, vigW, 0);
+  vigL.addColorStop(0, 'rgba(0,15,5,0.58)');
+  vigL.addColorStop(1, 'rgba(0,15,5,0)');
+  ctx.fillStyle = vigL;
+  ctx.fillRect(0, PZ_Y, vigW, PZ_H);
+
+  const vigR = ctx.createLinearGradient(CW - vigW, 0, CW, 0);
+  vigR.addColorStop(0, 'rgba(0,15,5,0)');
+  vigR.addColorStop(1, 'rgba(0,15,5,0.58)');
+  ctx.fillStyle = vigR;
+  ctx.fillRect(CW - vigW, PZ_Y, vigW, PZ_H);
+
+  // ── 5. Fade inferior foto → painel ───────────────
+  const botFade = ctx.createLinearGradient(0, BOT_Y - 36, 0, BOT_Y);
+  botFade.addColorStop(0, 'rgba(0,20,8,0)');
+  botFade.addColorStop(1, 'rgba(0,20,8,0.96)');
+  ctx.fillStyle = botFade;
+  ctx.fillRect(0, BOT_Y - 36, CW, 36);
+
+  // ── 6. Scrim superior ────────────────────────────
+  const topScrim = ctx.createLinearGradient(0, 0, 0, TOP_H + 32);
+  topScrim.addColorStop(0,    'rgba(0,15,5,0.96)');
+  topScrim.addColorStop(0.65, 'rgba(0,15,5,0.84)');
+  topScrim.addColorStop(1,    'rgba(0,15,5,0)');
+  ctx.fillStyle = topScrim;
+  ctx.fillRect(0, 0, CW, TOP_H + 32);
+
+  // ── 7. Hairlines douradas ─────────────────────────
+  ctx.fillStyle = '#FFDF00';
+  ctx.fillRect(0, TOP_H, CW, 3);
+  ctx.fillStyle = 'rgba(255,223,0,0.7)';
+  ctx.fillRect(0, BOT_Y - 3, CW, 3);
+
+  // ── 8. Conteúdo do header ────────────────────────
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle    = 'rgba(255,255,255,0.55)';
@@ -686,11 +694,10 @@ function renderCard(personSrc) {
   for (let i = 0; i < 5; i++)
     ctx.fillText('★', hPad + i * Math.round(10*S), Math.round(51*S));
 
-  // Centro: badge CBF
-  const badgeCX = CW / 2;
-  const badgeCY = HD / 2;
+  // Badge central
+  const badgeCX = CW / 2, badgeCY = TOP_H / 2;
   const badgeR  = Math.round(19 * S);
-  ctx.fillStyle   = '#007A30';
+  ctx.fillStyle   = 'rgba(0,60,20,0.85)';
   ctx.beginPath();
   ctx.arc(badgeCX, badgeCY, badgeR, 0, Math.PI * 2);
   ctx.fill();
@@ -701,7 +708,6 @@ function renderCard(personSrc) {
   drawStarPath(badgeCX, badgeCY, 5, Math.round(11*S), Math.round(5*S));
   ctx.stroke();
 
-  // Direita: Copa do Mundo + 2026
   ctx.textAlign    = 'right';
   ctx.textBaseline = 'top';
   ctx.fillStyle    = 'rgba(255,255,255,0.55)';
@@ -711,147 +717,61 @@ function renderCard(personSrc) {
   ctx.font      = `900 ${Math.round(30*S)}px Poppins, "Arial Black", Arial`;
   ctx.fillText('2026', CW - hPad, Math.round(18*S));
 
-  // ── 2. BANDA DOURADA SUPERIOR ─────────────────────────────
-  ctx.fillStyle = bandGrad();
-  ctx.fillRect(0, HD, CW, BH);
+  // Cantos no limite foto/header
+  drawCornerBracket(Math.round(10*S),     PZ_Y + Math.round(8*S), 'tl');
+  drawCornerBracket(CW - Math.round(10*S), PZ_Y + Math.round(8*S), 'tr');
 
-  // ── 3. PHOTO ZONE ─────────────────────────────────────────
-  // Fundo azul radial
-  const bg = ctx.createRadialGradient(CW/2, PZY+PZH*1.1, 0, CW/2, PZY+PZH*0.9, PZH*1.2);
-  bg.addColorStop(0,   '#001F6B');
-  bg.addColorStop(0.4, '#002776');
-  bg.addColorStop(1,   '#001240');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, PZY, CW, PZH);
+  // ── 9. Painel info (fundo escuro, cantos superiores arredondados) ─
+  const panelPath = new Path2D();
+  panelPath.roundRect(0, BOT_Y, CW, BOT_H, [14, 14, 0, 0]);
+  ctx.fillStyle = 'rgba(0,20,8,0.96)';
+  ctx.fill(panelPath);
 
-  // Raios sunburst (focal abaixo da zona, clippado)
-  drawSunburst(CW / 2, PZY + Math.round(310 * S));
-
-  // Banda "Ordem e Progresso" diagonal
+  // ── 10. Ghost elements no painel ─────────────────
   ctx.save();
-  ctx.translate(CW/2, PZY + Math.round(150*S));
-  ctx.rotate(-6 * Math.PI / 180);
-  ctx.fillStyle = 'rgba(0,39,118,0.22)';
-  ctx.fillRect(-Math.round(170*S), -Math.round(9*S), Math.round(340*S), Math.round(18*S));
-  ctx.fillStyle    = 'rgba(255,223,0,0.22)';
-  ctx.font         = `700 ${Math.round(7*S)}px Poppins, Arial`;
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('ORDEM E PROGRESSO', 0, 0);
-  ctx.restore();
-
-  // Losango outline
-  ctx.strokeStyle = 'rgba(255,223,0,0.10)';
-  ctx.lineWidth   = Math.round(1.5*S);
-  ctx.beginPath();
-  ctx.moveTo(Math.round(200*S), PZY + Math.round(8*S));
-  ctx.lineTo(Math.round(390*S), PZY + Math.round(150*S));
-  ctx.lineTo(Math.round(200*S), PZY + Math.round(292*S));
-  ctx.lineTo(Math.round(10*S),  PZY + Math.round(150*S));
-  ctx.closePath();
-  ctx.stroke();
-
-  // Anéis circulares
-  drawRing(CW/2, PZY+PZH-Math.round(100*S), Math.round(180*S), 'rgba(255,223,0,0.08)');
-  drawRing(CW/2, PZY+PZH-Math.round(60*S),  Math.round(130*S), 'rgba(255,223,0,0.06)');
-  drawRing(CW/2, PZY+PZH-Math.round(20*S),  Math.round(80*S),  'rgba(255,223,0,0.05)');
-
-  // Estrelas decorativas
-  drawPhotoStars();
-
-  // Ground glow
-  ctx.save();
-  ctx.shadowColor = 'rgba(255,223,0,0.4)';
-  ctx.shadowBlur  = Math.round(16*S);
-  ctx.fillStyle   = 'rgba(255,223,0,0.15)';
-  ctx.fillRect(CW/2 - Math.round(140*S), PZY+PZH-Math.round(38*S), Math.round(280*S), Math.round(18*S));
-  ctx.restore();
-
-  // Faixa de grama
-  const grassH = Math.round(24 * S);
-  const gGrad  = ctx.createLinearGradient(0, PZY+PZH-grassH, 0, PZY+PZH);
-  gGrad.addColorStop(0,   'rgba(0,0,0,0)');
-  gGrad.addColorStop(0.6, 'rgba(0,80,0,0.7)');
-  gGrad.addColorStop(1,   '#004810');
-  ctx.fillStyle = gGrad;
-  ctx.fillRect(0, PZY+PZH-grassH, CW, grassH);
-  ctx.fillStyle = 'rgba(255,223,0,0.25)';
-  ctx.fillRect(0, PZY+PZH-grassH, CW, 1);
-
-  // Pessoa segmentada ou placeholder
-  if (personSrc) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, PZY, CW, PZH);
-    ctx.clip();
-    ctx.drawImage(personSrc, 0, PZY);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = 'rgba(255,223,0,0.3)';
-    const phCX = CW / 2;
-    ctx.beginPath();
-    ctx.arc(phCX, PZY + Math.round(80*S), Math.round(34*S), 0, Math.PI*2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(phCX, PZY+PZH-Math.round(28*S), Math.round(80*S), Math.PI, 0);
-    ctx.fill();
-  }
-
-  // Cantos da photo zone
-  drawCornerBracket(Math.round(10*S),    PZY + Math.round(10*S), 'tl');
-  drawCornerBracket(CW-Math.round(10*S), PZY + Math.round(10*S), 'tr');
-
-  // ── 4. BANDA DOURADA INFERIOR ─────────────────────────────
-  ctx.fillStyle = bandGrad();
-  ctx.fillRect(0, PZY+PZH, CW, BH);
-
-  // ── 5. SEÇÃO INFO ─────────────────────────────────────────
-  ctx.fillStyle = '#009C3B';
-  ctx.fillRect(0, IY, CW, CH - IY);
-
-  const inPad = Math.round(18 * S);
-
-  // Ghost "BRASIL"
-  ctx.fillStyle    = 'rgba(0,80,20,0.35)';
-  ctx.font         = `900 ${Math.round(64*S)}px Poppins, "Arial Black", Arial`;
-  ctx.textAlign    = 'right';
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle   = '#FFDF00';
+  ctx.font        = `900 ${Math.round(68*S)}px Poppins, "Arial Black", Arial`;
+  ctx.textAlign   = 'right';
   ctx.textBaseline = 'top';
-  ctx.fillText('BRASIL', CW + Math.round(8*S), IY - Math.round(2*S));
+  ctx.fillText('BRASIL', CW + Math.round(8*S), BOT_Y - Math.round(8*S));
+  ctx.restore();
 
-  // Ghost número camisa
-  ctx.fillStyle    = 'rgba(0,80,20,0.28)';
-  ctx.font         = `900 ${Math.round(88*S)}px Poppins, "Arial Black", Arial`;
+  ctx.save();
+  ctx.globalAlpha  = 0.10;
+  ctx.fillStyle    = '#FFDF00';
+  ctx.font         = `900 ${Math.round(96*S)}px Poppins, "Arial Black", Arial`;
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'bottom';
-  ctx.fillText(numero, Math.round(14*S), CH - BSH - Math.round(44*S));
+  ctx.fillText(numero, Math.round(14*S), BSY_N - Math.round(10*S));
+  ctx.restore();
 
-  // Nome do colaborador (max 2 linhas)
+  // ── 11. Nome ─────────────────────────────────────
+  const words    = name.split(' ');
+  const mid      = Math.ceil(words.length / 2);
+  const line1    = words.slice(0, mid).join(' ');
+  const line2    = words.slice(mid).join(' ');
+  const lhPx     = Math.round(26 * S * 1.05);
+  const nameY    = BOT_Y + Math.round(12 * S);
+
   ctx.fillStyle    = '#FFDF00';
   ctx.font         = `900 ${Math.round(26*S)}px Poppins, "Arial Black", Arial`;
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'top';
-  ctx.shadowColor  = 'rgba(0,0,0,0.2)';
-  ctx.shadowBlur   = Math.round(8*S);
-
-  const words  = name.split(' ');
-  const mid    = Math.ceil(words.length / 2);
-  const line1  = words.slice(0, mid).join(' ');
-  const line2  = words.slice(mid).join(' ');
-  const lhPx   = Math.round(26*S * 1.05);
-  const nameY  = IY + Math.round(14*S);
+  ctx.shadowColor  = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur   = Math.round(6 * S);
   ctx.fillText(line1, inPad, nameY);
   if (line2) ctx.fillText(line2, inPad, nameY + lhPx);
   ctx.shadowBlur = 0;
 
-  // Tick line
   const linesUsed = line2 ? 2 : 1;
-  const tickY = nameY + linesUsed * lhPx + Math.round(8*S);
-  ctx.fillStyle = 'rgba(255,223,0,0.5)';
-  ctx.fillRect(inPad, tickY, Math.round(32*S), Math.round(3*S));
+  const tickY     = nameY + linesUsed * lhPx + Math.round(6 * S);
+  ctx.fillStyle   = 'rgba(255,223,0,0.5)';
+  ctx.fillRect(inPad, tickY, Math.round(32 * S), Math.round(3 * S));
 
   // Cargo · Departamento
-  const roleLineH = Math.round(12*S * 1.55);
-  const roleY     = tickY + Math.round(3*S) + Math.round(6*S);
+  const roleLineH = Math.round(12 * S * 1.55);
+  const roleY     = tickY + Math.round(3 * S) + Math.round(5 * S);
   ctx.fillStyle    = 'rgba(255,255,255,0.85)';
   ctx.font         = `${Math.round(12*S)}px Poppins, Arial`;
   ctx.textAlign    = 'left';
@@ -859,33 +779,32 @@ function renderCard(personSrc) {
   ctx.fillText(`${cargo} · ${depto}`, inPad, roleY);
   ctx.fillText('Hands On Tecnologia · São Paulo', inPad, roleY + roleLineH);
 
-  // ── 6. BRAND STRIP ────────────────────────────────────────
-  const BSY = CH - BSH;
+  // ── 12. Brand strip ───────────────────────────────
   ctx.fillStyle = '#005C1F';
-  ctx.fillRect(0, BSY, CW, BSH);
+  ctx.fillRect(0, BSY_N, CW, BSH_N);
   ctx.fillStyle = 'rgba(255,223,0,0.2)';
-  ctx.fillRect(0, BSY, CW, 1);
+  ctx.fillRect(0, BSY_N, CW, 1);
 
   ctx.fillStyle    = 'rgba(255,255,255,0.45)';
   ctx.font         = `700 ${Math.round(11*S)}px Poppins, Arial`;
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('HANDS ON', Math.round(16*S), BSY + BSH/2);
+  ctx.fillText('HANDS ON', Math.round(16*S), BSY_N + BSH_N/2);
 
   ctx.fillStyle = '#FF245C';
   ctx.font      = `700 ${Math.round(12*S)}px "JetBrains Mono", "Courier New", monospace`;
-  ctx.fillText('>>>', Math.round(16*S) + Math.round(74*S), BSY + BSH/2);
+  ctx.fillText('>>>', Math.round(16*S) + Math.round(74*S), BSY_N + BSH_N/2);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.font      = `600 ${Math.round(7*S)}px Poppins, Arial`;
-  ctx.fillText('ORDEM E PROGRESSO', CW - Math.round(16*S), BSY + BSH/2 - Math.round(5*S));
+  ctx.fillText('ORDEM E PROGRESSO', CW - Math.round(16*S), BSY_N + BSH_N/2 - Math.round(5*S));
   ctx.fillStyle = 'rgba(255,223,0,0.3)';
-  ctx.fillText('USA · MEX · CAN · 2026', CW - Math.round(16*S), BSY + BSH/2 + Math.round(5*S));
+  ctx.fillText('USA · MEX · CAN · 2026', CW - Math.round(16*S), BSY_N + BSH_N/2 + Math.round(5*S));
 
   ctx.restore(); // desfaz clip do card
 
-  // Borda branca interna
+  // Borda interna
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.42)';
   ctx.lineWidth   = 2.5;
