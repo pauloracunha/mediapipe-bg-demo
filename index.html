@@ -849,6 +849,77 @@ function drawRing(cx, cy, r, color) {
   ctx.stroke();
 }
 
+function drawSoccerField() {
+  const FL = 18, FT = 18;
+  const FW = CW - 36, FH = CH - 36;
+  const FR = FL + FW, FB = FT + FH;
+  const FCX = CW / 2;
+  const MID_Y = FT + FH / 2;
+
+  ctx.save();
+  ctx.strokeStyle = '#2E7D32';
+  ctx.fillStyle   = '#2E7D32';
+  ctx.lineWidth   = 1.5 * S;
+
+  // Retângulo externo
+  ctx.strokeRect(FL, FT, FW, FH);
+
+  // Linha do meio
+  ctx.beginPath();
+  ctx.moveTo(FL, MID_Y);
+  ctx.lineTo(FR, MID_Y);
+  ctx.stroke();
+
+  // Círculo central
+  const CR = Math.round(9.15 / 68 * FW);
+  ctx.beginPath();
+  ctx.arc(FCX, MID_Y, CR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Ponto central
+  ctx.beginPath();
+  ctx.arc(FCX, MID_Y, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Grandes áreas
+  const PA_W = Math.round(40.32 / 68 * FW);
+  const PA_H = Math.round(16.5  / 105 * FH);
+  const PA_L = FL + (FW - PA_W) / 2;
+  ctx.strokeRect(PA_L, FT,        PA_W, PA_H);
+  ctx.strokeRect(PA_L, FB - PA_H, PA_W, PA_H);
+
+  // Pequenas áreas
+  const GA_W = Math.round(18.32 / 68 * FW);
+  const GA_H = Math.round(5.5   / 105 * FH);
+  const GA_L = FL + (FW - GA_W) / 2;
+  ctx.strokeRect(GA_L, FT,        GA_W, GA_H);
+  ctx.strokeRect(GA_L, FB - GA_H, GA_W, GA_H);
+
+  // Pontos de pênalti
+  const PS_H = Math.round(11 / 105 * FH);
+  ctx.beginPath(); ctx.arc(FCX, FT + PS_H, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(FCX, FB - PS_H, 3, 0, Math.PI * 2); ctx.fill();
+
+  // Meias-luas (D) — círculo completo clipado fora das grandes áreas
+  const DA_R = Math.round(9.15 / 68 * FW);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, FT + PA_H, CW, FH - 2 * PA_H);
+  ctx.clip();
+  ctx.beginPath(); ctx.arc(FCX, FT + PS_H, DA_R, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(FCX, FB - PS_H, DA_R, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+
+  // Arcos dos cantos
+  const CA_R = Math.max(7, Math.round(1 / 68 * FW));
+  ctx.beginPath(); ctx.arc(FL, FT, CA_R, 0,           Math.PI / 2,     false); ctx.stroke();
+  ctx.beginPath(); ctx.arc(FR, FT, CA_R, Math.PI / 2, Math.PI,         false); ctx.stroke();
+  ctx.beginPath(); ctx.arc(FL, FB, CA_R, -Math.PI / 2, 0,              false); ctx.stroke();
+  ctx.beginPath(); ctx.arc(FR, FB, CA_R, Math.PI,      3*Math.PI / 2,  false); ctx.stroke();
+
+  ctx.restore();
+}
+
 function drawCornerBracket(x, y, dir) {
   const sz = Math.round(22 * S);
   ctx.strokeStyle = 'rgba(255,223,0,0.55)';
@@ -883,46 +954,18 @@ function renderCard(personSrc) {
   const PZ_Y  = TOP_H + 4;   // foto visível começa aqui
   const PZ_H  = BOT_Y - PZ_Y - 4; // zona visível sem overlay (~392px)
 
-  // ── 1. Background ────────────────────────────────
-  ctx.fillStyle = '#001A0A';
+  // ── 1. Background (verde claro) ──────────────────
+  ctx.fillStyle = '#C8E6C9';
   ctx.fillRect(0, 0, CW, CH);
 
-  // ── 2. Elementos decorativos (atrás da pessoa) ───
-  ctx.save();
-  ctx.globalAlpha = 0.09;
-  drawRing(CW/2, BOT_Y - Math.round(55*S), Math.round(155*S), '#FFDF00');
-  drawRing(CW/2, BOT_Y - Math.round(30*S), Math.round(105*S), '#FFDF00');
-  ctx.restore();
-
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  [
-    {cx: 42,       cy: PZ_Y + PZ_H*0.15, sz:13, a:0.40},
-    {cx: 26,       cy: PZ_Y + PZ_H*0.30, sz: 8, a:0.30},
-    {cx: 58,       cy: PZ_Y + PZ_H*0.46, sz: 6, a:0.24},
-    {cx: CW - 42,  cy: PZ_Y + PZ_H*0.13, sz:12, a:0.38},
-    {cx: CW - 27,  cy: PZ_Y + PZ_H*0.29, sz: 7, a:0.28},
-    {cx: CW - 56,  cy: PZ_Y + PZ_H*0.44, sz: 6, a:0.22},
-  ].forEach(({cx, cy, sz, a}) => {
-    ctx.fillStyle = `rgba(255,223,0,${a})`;
-    ctx.font      = `${sz}px Arial`;
-    ctx.fillText('★', cx, cy);
-  });
-
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,220,0,0.09)';
-  ctx.lineWidth   = 2;
-  ctx.beginPath();
-  ctx.moveTo(0,  BOT_Y - Math.round(80*S));
-  ctx.lineTo(CW, PZ_Y  + Math.round(80*S));
-  ctx.stroke();
-  ctx.restore();
+  // ── 2. Campo de futebol ──────────────────────────
+  drawSoccerField();
 
   // ── 3. Pessoa full-bleed ─────────────────────────
   if (personSrc) {
     ctx.drawImage(personSrc, 0, 0);
   } else {
-    ctx.fillStyle = 'rgba(255,223,0,0.16)';
+    ctx.fillStyle = 'rgba(0,100,30,0.35)';
     ctx.beginPath();
     ctx.arc(CW/2, Math.round(220*S), Math.round(46*S), 0, Math.PI * 2);
     ctx.fill();
