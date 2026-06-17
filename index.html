@@ -77,9 +77,9 @@
     .char-count { font-size: 0.67rem; color: #444; text-align: right; }
 
     .field-row             { display: flex; gap: 12px; }
-    .field-row .field      { flex: 1; }
-    .field.narrow          { max-width: 90px; }
-    .field.narrow input    { text-align: center; }
+    .field-row .field      { flex: 1; min-width: 0; }
+    .field.narrow          { flex: 0 0 80px; }
+    .field.narrow input    { text-align: center; width: 100%; min-width: 0; }
 
     .form-divider { height: 1px; background: #22223a; }
 
@@ -345,7 +345,7 @@
     </div>
 
     <div class="field-row">
-      <div class="field" style="flex:1">
+      <div class="field">
         <label>Departamento</label>
         <input type="text" id="playerDepto" maxlength="28" placeholder="Ex: Tecnologia">
       </div>
