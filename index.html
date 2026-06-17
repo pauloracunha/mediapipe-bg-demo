@@ -2,122 +2,305 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Figurinha Copa 2026 — MediaPipe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Figurinha Copa 2026</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
-    :root { --country: #009c3b; }
+    :root { --country: #009c3b; --pink: #FF245C; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Poppins', system-ui, sans-serif;
       background: #0d0d16;
       color: #e0e0e0;
       min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* ══ VIEW: FORMULÁRIO ════════════════════════════════════ */
+    #viewForm {
+      min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 28px 16px;
-      gap: 22px;
+      justify-content: center;
+      padding: 28px 20px;
     }
 
-    h1 {
+    .form-logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .form-logo h1 {
       font-size: 1.45rem;
-      font-weight: 800;
+      font-weight: 900;
       color: #fff;
       letter-spacing: -0.02em;
     }
-    h1 em { color: var(--country); font-style: normal; }
+    .form-logo h1 em { color: var(--country); font-style: normal; }
+    .form-logo .sub  { font-size: 0.75rem; color: #555; margin-top: 4px; }
+    .form-logo .ver  { font-size: 0.55rem; color: #333; font-weight: 400; letter-spacing: 0; }
 
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      align-items: center;
-      background: #16161f;
-      border: 1px solid #2a2a3a;
-      border-radius: 14px;
-      padding: 14px 20px;
+    .form-card {
+      background: #14141e;
+      border: 1px solid #22223a;
+      border-radius: 20px;
+      padding: 28px 24px 32px;
       width: 100%;
-      max-width: 600px;
-    }
-
-    .controls-sep {
-      width: 100%;
-      height: 1px;
-      background: #2a2a3a;
-    }
-
-    label {
-      font-size: 0.78rem;
-      color: #888;
+      max-width: 380px;
       display: flex;
-      align-items: center;
-      gap: 6px;
+      flex-direction: column;
+      gap: 16px;
     }
-    input[type="text"], input[type="number"] {
-      background: #22222e;
+
+    .field        { display: flex; flex-direction: column; gap: 5px; }
+    .field label  { font-size: 0.7rem; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 0.06em; }
+    .field input  {
+      background: #1c1c2a;
       color: #fff;
-      border: 1px solid #3a3a4c;
-      border-radius: 6px;
-      padding: 5px 10px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
+      border: 1.5px solid #2c2c44;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.95rem;
+      font-weight: 600;
       font-family: inherit;
+      transition: border-color 0.15s;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
     }
-    input[type="range"] {
-      width: 80px;
-      accent-color: var(--country);
-    }
-    button {
+    .field input::placeholder { color: #3a3a52; font-weight: 400; }
+    .field input:focus        { border-color: var(--pink); }
+    .field input.err          { border-color: #f44336; }
+    .char-count { font-size: 0.67rem; color: #444; text-align: right; }
+
+    .field-row             { display: flex; gap: 12px; }
+    .field-row .field      { flex: 1; }
+    .field.narrow          { max-width: 90px; }
+    .field.narrow input    { text-align: center; }
+
+    .form-divider { height: 1px; background: #22223a; }
+
+    .btn-primary {
+      background: var(--pink);
+      color: #fff;
       border: none;
-      border-radius: 8px;
-      padding: 8px 18px;
-      font-size: 0.82rem;
-      font-weight: 700;
+      border-radius: 12px;
+      padding: 15px;
+      font-size: 1rem;
+      font-weight: 800;
+      font-family: inherit;
       cursor: pointer;
-      transition: opacity 0.15s, filter 0.15s;
+      letter-spacing: 0.01em;
+      margin-top: 4px;
+      transition: filter 0.15s, transform 0.1s;
     }
-    button:hover { filter: brightness(1.15); }
-    button:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
-    .btn-start { background: var(--country); color: #fff; }
-    .btn-stop  { background: #2a2a3a; color: #ccc; }
-    .btn-dl    { background: #FFD700; color: #000; }
-    .btn-flip  { background: #2a2a3a; color: #ccc; }
+    .btn-primary:hover  { filter: brightness(1.12); }
+    .btn-primary:active { transform: scale(0.97); }
 
-    .sticker-wrap {
+    #formError { font-size: 0.78rem; color: #f44336; text-align: center; min-height: 1.1em; }
+
+    /* ══ VIEW: FIGURINHA ════════════════════════════════════ */
+    #viewSticker {
+      position: fixed;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      background: #0a0a12;
+      z-index: 100;
+    }
+    #viewSticker.active { display: flex; }
+
+    .sticker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      flex-shrink: 0;
+      height: 50px;
+    }
+    .btn-ghost {
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 0.83rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.07); color: #aaa; }
+
+    .canvas-area {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
       position: relative;
-      filter:
-        drop-shadow(0 0 28px color-mix(in srgb, var(--country) 55%, transparent))
-        drop-shadow(0 16px 40px rgba(0,0,0,0.8));
     }
 
-    canvas#output {
-      display: block;
-      width: 300px;
-      height: 420px;
+    #output {
+      max-height: 100%;
+      max-width: 100%;
+      aspect-ratio: 480 / 672;
       border-radius: 13px;
+      display: block;
+      filter:
+        drop-shadow(0 0 22px rgba(0,156,59,0.4))
+        drop-shadow(0 10px 28px rgba(0,0,0,0.75));
     }
 
-    .fps {
+    #statusOverlay {
       position: absolute;
-      top: 10px; right: 10px;
-      font-size: 0.68rem;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #666;
+      font-size: 0.82rem;
+      pointer-events: none;
+    }
+    #statusOverlay.hidden { display: none; }
+    #statusOverlay.err    { color: #f44336; }
+
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid #222;
+      border-top-color: var(--country);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #fpsBadge {
+      position: absolute;
+      top: 6px; right: 10px;
+      font-size: 0.65rem;
       font-family: monospace;
-      background: rgba(0,0,0,0.65);
+      background: rgba(0,0,0,0.6);
       color: #fff;
       padding: 2px 7px;
       border-radius: 4px;
       pointer-events: none;
     }
 
-    #status { font-size: 0.76rem; min-height: 1.1em; }
-    #status.ok      { color: #4caf50; }
-    #status.err     { color: #f44336; }
-    #status.loading { color: #888; }
+    /* Rodapé */
+    .sticker-footer {
+      height: 110px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding: 0 24px;
+    }
 
+    /* Estado: câmera ao vivo */
+    #ctrlLive {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      position: relative;
+    }
+
+    /* Botão shutter — estilo câmera nativa */
+    #btnShutter {
+      width: 70px; height: 70px;
+      border-radius: 50%;
+      background: #fff;
+      border: none;
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+      box-shadow:
+        0 0 0 5px rgba(255,255,255,0.22),
+        0 0 0 9px rgba(255,255,255,0.08);
+      transition: transform 0.08s, box-shadow 0.08s;
+    }
+    #btnShutter::after {
+      content: '';
+      position: absolute;
+      inset: 5px;
+      border-radius: 50%;
+      border: 2px solid rgba(0,0,0,0.1);
+    }
+    #btnShutter:active {
+      transform: scale(0.88);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.22), 0 0 0 6px rgba(255,255,255,0.08);
+    }
+
+    #btnFlip {
+      position: absolute;
+      right: 0;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      color: #fff;
+      font-size: 1.15rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    #btnFlip:hover     { background: rgba(255,255,255,0.15); }
+    #btnFlip:disabled  { opacity: 0.25; cursor: not-allowed; }
+
+    /* Estado: imagem congelada */
+    #ctrlFrozen {
+      display: none;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .btn-retry {
+      background: rgba(255,255,255,0.08);
+      border: 1.5px solid rgba(255,255,255,0.14);
+      color: #aaa;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .btn-retry:hover  { background: rgba(255,255,255,0.13); }
+    .btn-retry:active { transform: scale(0.97); }
+
+    .btn-share {
+      background: var(--pink);
+      border: none;
+      color: #fff;
+      border-radius: 12px;
+      padding: 13px 28px;
+      font-size: 1rem;
+      font-weight: 800;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 4px 18px rgba(255,36,92,0.38);
+      transition: filter 0.15s, transform 0.1s;
+    }
+    .btn-share:hover  { filter: brightness(1.12); }
+    .btn-share:active { transform: scale(0.96); }
+
+    /* Debug overlay */
     #debugLog {
       position: fixed;
       bottom: 0; left: 0; right: 0;
@@ -137,75 +320,83 @@
     #debugLog .dbg-warn { color: #FFD700; }
     #debugLog .dbg-info { color: #69b4ff; }
     #debugClose {
-      position: sticky;
-      top: 0;
-      float: right;
-      background: #f44336;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 11px;
-      cursor: pointer;
+      position: sticky; top: 0; float: right;
+      background: #f44336; color: #fff;
+      border: none; border-radius: 4px;
+      padding: 2px 8px; font-size: 11px; cursor: pointer;
       margin-bottom: 4px;
     }
   </style>
 </head>
 <body>
 
-<h1>Figurinha <em>Copa do Mundo 2026™</em> <span id="appVersion" style="font-size:0.55rem;font-weight:400;color:#444;letter-spacing:0">v0.9.6</span></h1>
+<!-- ══ VIEW: FORMULÁRIO ══════════════════════════════════════ -->
+<div id="viewForm">
+  <div class="form-logo">
+    <h1>Figurinha <em>Copa 2026™</em> <span class="ver" id="appVersion">v0.9.6</span></h1>
+    <p class="sub">Crie sua figurinha personalizada</p>
+  </div>
 
-<div class="controls">
-  <!-- identidade -->
-  <label>
-    Nome
-    <input type="text" id="playerName" value="NOME DO COLABORADOR" maxlength="26" style="width:180px">
-  </label>
-  <label>
-    Nº
-    <input type="number" id="playerNumber" value="10" min="1" max="99" style="width:52px;text-align:center">
-  </label>
+  <div class="form-card">
+    <div class="field">
+      <label>Nome</label>
+      <input type="text" id="playerName" maxlength="20" placeholder="Seu nome completo" autocomplete="name" inputmode="text">
+      <span class="char-count" id="nameCount">0 / 20</span>
+    </div>
 
-  <!-- cargo / depto -->
-  <label>
-    Cargo
-    <input type="text" id="playerCargo" value="Cargo" maxlength="28" style="width:130px">
-  </label>
-  <label>
-    Depto.
-    <input type="text" id="playerDepto" value="Departamento" maxlength="28" style="width:140px">
-  </label>
+    <div class="field-row">
+      <div class="field" style="flex:1">
+        <label>Departamento</label>
+        <input type="text" id="playerDepto" maxlength="28" placeholder="Ex: Tecnologia">
+      </div>
+      <div class="field narrow">
+        <label>Nº Camisa</label>
+        <input type="number" id="playerNumber" min="1" max="99" placeholder="10" inputmode="numeric">
+      </div>
+    </div>
 
-  <div class="controls-sep"></div>
+    <div class="field">
+      <label>Cargo</label>
+      <input type="text" id="playerCargo" maxlength="28" placeholder="Ex: Desenvolvedor">
+    </div>
 
-  <!-- sliders -->
-  <label>
-    Máscara
-    <input type="range" id="threshold" min="1" max="92" value="42">
-  </label>
-  <label>
-    Borda
-    <input type="range" id="feather" min="2" max="40" value="15">
-  </label>
-  <label>
-    Temporal
-    <input type="range" id="temporal" min="0" max="85" value="60">
-  </label>
+    <div class="form-divider"></div>
 
-  <!-- botões -->
-  <button class="btn-start" id="btnStart" disabled>▶ Câmera</button>
-  <button class="btn-stop"  id="btnStop"  disabled>■ Parar</button>
-  <button class="btn-flip"  id="btnFlip"  disabled>⇄ Trocar</button>
-  <button class="btn-dl"    id="btnDl">⬇ Salvar</button>
+    <button class="btn-primary" id="btnGenerate">Gerar figurinha ▶</button>
+    <p id="formError"></p>
+  </div>
 </div>
 
-<div class="sticker-wrap">
-  <canvas id="output" width="480" height="672"></canvas>
-  <div class="fps" id="fpsBadge">-- fps</div>
+<!-- ══ VIEW: FIGURINHA ═══════════════════════════════════════ -->
+<div id="viewSticker">
+  <header class="sticker-header">
+    <button class="btn-ghost" id="btnBack">← Voltar</button>
+    <span style="font-size:0.6rem;color:#2a2a3a">v0.9.6</span>
+    <span style="width:68px"></span>
+  </header>
+
+  <div class="canvas-area">
+    <canvas id="output" width="480" height="672"></canvas>
+    <div id="statusOverlay">
+      <div class="spinner" id="statusSpinner"></div>
+      <span id="statusText">Carregando modelo…</span>
+    </div>
+    <div id="fpsBadge">-- fps</div>
+  </div>
+
+  <footer class="sticker-footer">
+    <div id="ctrlLive">
+      <button id="btnShutter" aria-label="Tirar foto"></button>
+      <button id="btnFlip" title="Trocar câmera" disabled>⇄</button>
+    </div>
+    <div id="ctrlFrozen">
+      <button class="btn-retry" id="btnRetry">Tentar novamente</button>
+      <button class="btn-share" id="btnShare">⬆ Compartilhar</button>
+    </div>
+  </footer>
 </div>
 
-<div id="status" class="loading">Carregando modelo MediaPipe…</div>
-
+<!-- Debug overlay -->
 <div id="debugLog">
   <button id="debugClose">✕ fechar</button>
   <div id="debugLines"></div>
@@ -219,7 +410,7 @@ import {
   FilesetResolver,
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
 
-// ── Debug overlay ────────────────────────────────────────────
+// ── Debug ────────────────────────────────────────────────────
 const DEBUG      = new URLSearchParams(location.search).has('debug');
 const debugLog   = document.getElementById('debugLog');
 const debugLines = document.getElementById('debugLines');
@@ -239,33 +430,48 @@ function dbg(msg, level = 'info') {
   debugLog.scrollTop = debugLog.scrollHeight;
 }
 
-// ── Layout constants (base 400×560, escala 1.2 → 480×672) ────
-const CW  = 480, CH = 672;
-const S = CW / 400; // 1.2
+// ── Layout constants ─────────────────────────────────────────
+const CW = 480, CH = 672;
+const S  = CW / 400; // 1.2
+
+// Parâmetros de segmentação (fixos)
+const THR     = 0.42;
+const FEATHER = 0.15;
+const TEMP_W  = 0.60;
 
 // ── DOM ──────────────────────────────────────────────────────
 const video         = document.getElementById('video');
 const canvas        = document.getElementById('output');
 const ctx           = canvas.getContext('2d');
-const status        = document.getElementById('status');
-const btnStart      = document.getElementById('btnStart');
-const btnStop       = document.getElementById('btnStop');
-const btnDl         = document.getElementById('btnDl');
-const btnFlip       = document.getElementById('btnFlip');
 const fpsBadge      = document.getElementById('fpsBadge');
 const nameInput     = document.getElementById('playerName');
 const numInput      = document.getElementById('playerNumber');
 const cargoInput    = document.getElementById('playerCargo');
 const deptoInput    = document.getElementById('playerDepto');
-const thrInput      = document.getElementById('threshold');
-const featherInput  = document.getElementById('feather');
-const temporalInput = document.getElementById('temporal');
+
+const viewForm      = document.getElementById('viewForm');
+const viewSticker   = document.getElementById('viewSticker');
+const statusOverlay = document.getElementById('statusOverlay');
+const statusSpinner = document.getElementById('statusSpinner');
+const statusText    = document.getElementById('statusText');
+const nameCount     = document.getElementById('nameCount');
+const formError     = document.getElementById('formError');
+
+const btnGenerate   = document.getElementById('btnGenerate');
+const btnBack       = document.getElementById('btnBack');
+const btnShutter    = document.getElementById('btnShutter');
+const btnFlip       = document.getElementById('btnFlip');
+const btnRetry      = document.getElementById('btnRetry');
+const btnShare      = document.getElementById('btnShare');
+const ctrlLive      = document.getElementById('ctrlLive');
+const ctrlFrozen    = document.getElementById('ctrlFrozen');
 
 // ── State ────────────────────────────────────────────────────
 let segmenter = null, stream = null, running = false;
 let lastTs = 0, fpsArr = [];
 let cameras = [], camIdx = 0;
 let workMask = null, prevMask = null;
+let stickerActive = false, statusHidden = false;
 
 // ── Offscreen canvases ───────────────────────────────────────
 const vCanvas = document.createElement('canvas');
@@ -277,39 +483,155 @@ pCanvas.width  = CW;
 pCanvas.height = CH;
 const pCtx = pCanvas.getContext('2d');
 
-// Canvas da máscara (tamanho do output do MediaPipe, redimensionado por drawImage no GPU)
 const mCanvas = document.createElement('canvas');
 const mCtx    = mCanvas.getContext('2d');
 
+// ── Status helpers ───────────────────────────────────────────
+function setStatus(msg, isErr = false) {
+  if (statusText)    statusText.textContent = msg;
+  if (statusSpinner) statusSpinner.style.display = isErr ? 'none' : '';
+  if (statusOverlay) {
+    statusOverlay.className = isErr ? 'err' : '';
+    statusOverlay.style.display = 'flex';
+  }
+}
+
+function hideStatus() {
+  if (!statusHidden) {
+    statusHidden = true;
+    if (statusOverlay) statusOverlay.classList.add('hidden');
+  }
+}
+
+// ── View switching ───────────────────────────────────────────
+function showSticker() {
+  stickerActive = true;
+  statusHidden  = false;
+  viewForm.style.display = 'none';
+  viewSticker.classList.add('active');
+  setLiveUI();
+  if (statusOverlay) { statusOverlay.className = ''; statusOverlay.style.display = 'flex'; }
+  if (segmenter) {
+    initCamera().catch(e => setStatus('Erro câmera: ' + e.message, true));
+  }
+  // Se model ainda carregando, loadModel() chama initCamera() quando pronto
+}
+
+function showForm() {
+  running       = false;
+  stickerActive = false;
+  stream?.getTracks().forEach(t => t.stop());
+  stream = null;
+  viewSticker.classList.remove('active');
+  viewForm.style.display = '';
+  setLiveUI();
+}
+
+function setLiveUI() {
+  ctrlLive.style.display   = 'flex';
+  ctrlFrozen.style.display = 'none';
+}
+
+function setFrozenUI() {
+  ctrlLive.style.display   = 'none';
+  ctrlFrozen.style.display = 'flex';
+}
+
+// ── Share ────────────────────────────────────────────────────
+async function shareSticker() {
+  try {
+    const blob = await new Promise((res, rej) =>
+      canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob falhou')), 'image/png')
+    );
+    const slug = (nameInput.value || 'jogador').replace(/\s+/g, '-').toLowerCase();
+    const file = new File([blob], `figurinha-copa2026-${slug}.png`, { type: 'image/png' });
+
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        title: 'Minha Figurinha Copa 2026',
+        text:  `⚽ ${nameInput.value || 'Colaborador'} — Copa do Mundo 2026!`,
+        files: [file],
+      });
+    } else if (navigator.share) {
+      await navigator.share({
+        title: 'Minha Figurinha Copa 2026',
+        text:  `⚽ ${nameInput.value || 'Colaborador'} — Copa do Mundo 2026!`,
+      });
+    } else {
+      const a = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = file.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') dbg('share erro: ' + e.message, 'err');
+  }
+}
+
+// ── Validação ────────────────────────────────────────────────
+function validateForm() {
+  [nameInput, deptoInput, cargoInput, numInput].forEach(el => el.classList.remove('err'));
+  formError.textContent = '';
+
+  if (!nameInput.value.trim()) {
+    nameInput.classList.add('err');
+    formError.textContent = 'Nome é obrigatório.';
+    nameInput.focus();
+    return false;
+  }
+  if (!deptoInput.value.trim()) {
+    deptoInput.classList.add('err');
+    formError.textContent = 'Departamento é obrigatório.';
+    deptoInput.focus();
+    return false;
+  }
+  if (!cargoInput.value.trim()) {
+    cargoInput.classList.add('err');
+    formError.textContent = 'Cargo é obrigatório.';
+    cargoInput.focus();
+    return false;
+  }
+  const num = parseInt(numInput.value);
+  if (!numInput.value || isNaN(num) || num < 1 || num > 99) {
+    numInput.classList.add('err');
+    formError.textContent = 'Número da camisa deve ser entre 1 e 99.';
+    numInput.focus();
+    return false;
+  }
+  return true;
+}
+
 // ── Model ────────────────────────────────────────────────────
 async function loadModel() {
-  status.className   = 'loading';
-  status.textContent = 'Inicializando runtime…';
-  const vision = await FilesetResolver.forVisionTasks(
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-  );
-  status.textContent = 'Baixando modelo…';
-  const modelOpts = {
-    baseOptions: {
-      modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
-    },
-    runningMode: 'IMAGE',
-    outputCategoryMask: true,
-    outputConfidenceMasks: true,
-  };
-  // CPU delegate: GPU no Android Chrome produz inferência zero (bug WebGL silencioso)
+  setStatus('Inicializando runtime…');
   try {
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+    );
+    setStatus('Baixando modelo…');
+    const modelOpts = {
+      baseOptions: {
+        modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
+      },
+      runningMode: 'IMAGE',
+      outputCategoryMask: true,
+      outputConfidenceMasks: true,
+    };
+    // CPU delegate: GPU no Android Chrome produz inferência zero (bug WebGL silencioso)
     segmenter = await ImageSegmenter.createFromOptions(vision,
       { ...modelOpts, baseOptions: { ...modelOpts.baseOptions, delegate: 'CPU' } });
     dbg('Modelo carregado — delegate: CPU', 'info');
+    if (stickerActive) {
+      await initCamera();
+    } else {
+      hideStatus();
+    }
   } catch (e) {
-    dbg('CPU falhou: ' + e.message, 'err');
-    throw e;
+    dbg('loadModel erro: ' + e.message, 'err');
+    setStatus('Erro ao carregar modelo: ' + e.message, true);
   }
-  status.className   = 'ok';
-  status.textContent = 'Modelo pronto. Clique em Câmera.';
-  btnStart.disabled  = false;
 }
 
 // ── Camera ───────────────────────────────────────────────────
@@ -338,12 +660,12 @@ async function startCamera(deviceId) {
 }
 
 async function initCamera() {
+  setStatus('Acessando câmera…');
   await startCamera(null);
-  running = true;
-  btnStart.disabled = true;
-  btnStop.disabled  = false;
-  status.className  = 'ok';
-  status.textContent = 'Segmentação ativa.';
+  running       = true;
+  statusHidden  = false;
+  lastTs        = 0; fpsArr = []; prevMask = null; workMask = null;
+  _dbgFrameCount = 0;
   requestAnimationFrame(loop);
 }
 
@@ -351,7 +673,6 @@ async function flipCamera() {
   if (cameras.length < 2) return;
   camIdx = (camIdx + 1) % cameras.length;
   btnFlip.disabled = true;
-  status.textContent = 'Trocando câmera…';
   const wasRunning = running;
   running = false;
   await startCamera(cameras[camIdx].deviceId);
@@ -360,19 +681,7 @@ async function flipCamera() {
     lastTs = 0; fpsArr = []; prevMask = null; workMask = null;
     requestAnimationFrame(loop);
   }
-  btnFlip.disabled  = cameras.length < 2;
-  status.className  = 'ok';
-  status.textContent = `Câmera ${camIdx + 1}/${cameras.length} ativa.`;
-}
-
-function stopCamera() {
-  running = false;
-  stream?.getTracks().forEach(t => t.stop());
-  btnStart.disabled = false;
-  btnStop.disabled  = true;
-  btnFlip.disabled  = true;
-  status.textContent = 'Câmera parada.';
-  renderCard(null);
+  btnFlip.disabled = cameras.length < 2;
 }
 
 // ── Render loop ──────────────────────────────────────────────
@@ -380,11 +689,8 @@ function loop(ts) {
   if (!running) return;
   if (video.readyState < 2) { requestAnimationFrame(loop); return; }
 
-  const vW      = video.videoWidth;
-  const vH      = video.videoHeight;
-  const thr     = parseInt(thrInput.value)     / 100;
-  const feather = parseInt(featherInput.value) / 100;
-  const tempW   = parseInt(temporalInput.value) / 100;
+  const vW = video.videoWidth;
+  const vH = video.videoHeight;
 
   // Cover crop — portrait e landscape, full card
   const srcScale = Math.min(vW / CW, vH / CH);
@@ -396,36 +702,25 @@ function loop(ts) {
   vCtx.drawImage(video, 0, 0);
 
   try {
-    // API síncrona — testa ambas as fontes; vCanvas pode estar em branco no iOS
     const result = segmenter.segment(video);
 
     _dbgFrameCount++;
     if (_dbgFrameCount === 1) {
-      // Verifica se vCanvas tem pixels reais (não está em branco)
       try {
         const cx = Math.floor(vW / 2), cy = Math.floor(vH / 2);
         const px = vCtx.getImageData(cx, cy, 1, 1).data;
         dbg(`vCanvas pixel central: rgb(${px[0]},${px[1]},${px[2]}) a=${px[3]}`, px[3] === 0 ? 'warn' : 'info');
-        const px2 = vCtx.getImageData(10, 10, 1, 1).data;
-        dbg(`vCanvas px(10,10): rgb(${px2[0]},${px2[1]},${px2[2]}) a=${px2[3]}`, 'info');
       } catch(e) { dbg('getImageData erro: ' + e.message, 'err'); }
-      dbg(`1º frame — vídeo ${vW}×${vH} canvas ${vCanvas.width}×${vCanvas.height}`, 'info');
-      // inspeciona estrutura do result
-      const keys = Object.keys(result).join(',');
+      dbg(`1º frame — vídeo ${vW}×${vH}`, 'info');
       const hasCat  = result.categoryMask != null;
       const hasConf = result.confidenceMasks?.length > 0;
-      dbg(`result keys=${keys} hasCat=${hasCat} hasConf=${hasConf}`, 'info');
-      if (hasCat) {
-        const cm = result.categoryMask;
-        const arr = cm.getAsUint8Array?.() ?? cm.getAsFloat32Array?.();
-        dbg(`categoryMask ${cm.width}×${cm.height} sample[0]=${arr?.[0]} sample[mid]=${arr?.[Math.floor(arr.length/2)]}`, 'info');
-      }
+      dbg(`result hasCat=${hasCat} hasConf=${hasConf}`, 'info');
     }
 
     const masks = result.confidenceMasks;
     if (!masks?.length) {
       if (_dbgFrameCount <= 5 || _dbgFrameCount % 60 === 0)
-        dbg(`frame ${_dbgFrameCount}: confidenceMasks vazio. categoryMask=${result.categoryMask != null}`, 'warn');
+        dbg(`frame ${_dbgFrameCount}: confidenceMasks vazio`, 'warn');
       result.close();
       requestAnimationFrame(loop); return;
     }
@@ -439,7 +734,7 @@ function loop(ts) {
     if (_dbgFrameCount <= 3) {
       let rMax = 0;
       for (let i = 0; i < rawMask.length; i++) if (rawMask[i] > rMax) rMax = rawMask[i];
-      dbg(`rawMask ${maskW}×${maskH} len=${rawMask.length} rMax=${rMax.toFixed(3)} mid=${rawMask[Math.floor(rawMask.length/2)].toFixed(3)}`, rMax < 0.05 ? 'warn' : 'info');
+      dbg(`rawMask ${maskW}×${maskH} rMax=${rMax.toFixed(3)}`, rMax < 0.05 ? 'warn' : 'info');
     }
 
     // Temporal smoothing
@@ -447,9 +742,9 @@ function loop(ts) {
       workMask = new Float32Array(maskSize);
       prevMask = null;
     }
-    if (prevMask && tempW > 0) {
+    if (prevMask && TEMP_W > 0) {
       for (let i = 0; i < maskSize; i++)
-        workMask[i] = (1 - tempW) * rawMask[i] + tempW * prevMask[i];
+        workMask[i] = (1 - TEMP_W) * rawMask[i] + TEMP_W * prevMask[i];
     } else {
       workMask.set(rawMask);
     }
@@ -463,7 +758,7 @@ function loop(ts) {
     }
     const maskImgData = new ImageData(maskW, maskH);
     const md          = maskImgData.data;
-    const featherInv  = feather > 0 ? 1 / feather : 255;
+    const featherInv  = FEATHER > 0 ? 1 / FEATHER : 255;
     let   personDetected = false;
     let   maskMax = 0;
 
@@ -471,20 +766,17 @@ function loop(ts) {
       const v = workMask[i];
       if (v > maskMax) maskMax = v;
       if (v > 0.05) personDetected = true;
-      const a = v <= thr ? 0 : Math.min(255, Math.round((v - thr) * featherInv * 255));
+      const a = v <= THR ? 0 : Math.min(255, Math.round((v - THR) * featherInv * 255));
       const p = i * 4;
       md[p] = md[p+1] = md[p+2] = 255;
       md[p+3] = a;
     }
 
-    // Log diagnóstico
     if (_dbgFrameCount <= 5 || _dbgFrameCount % 150 === 0) {
       const ctr    = workMask[Math.floor(maskH/2) * maskW + Math.floor(maskW/2)];
       let   maskMin = workMask[0];
       for (let i = 1; i < maskSize; i++) if (workMask[i] < maskMin) maskMin = workMask[i];
-      dbg(`frame ${_dbgFrameCount}: len=${masks.length} ${maskW}×${maskH}` +
-          ` min=${maskMin.toFixed(3)} max=${maskMax.toFixed(3)} ctr=${ctr.toFixed(3)}` +
-          ` thr=${thr.toFixed(2)} person=${personDetected}`,
+      dbg(`frame ${_dbgFrameCount}: ${maskW}×${maskH} min=${maskMin.toFixed(3)} max=${maskMax.toFixed(3)} ctr=${ctr.toFixed(3)} person=${personDetected}`,
         maskMax < 0.05 ? 'warn' : 'info');
     }
 
@@ -510,6 +802,7 @@ function loop(ts) {
     }
 
     renderCard(pCanvas);
+    hideStatus();
 
     if (lastTs > 0) {
       fpsArr.push(ts - lastTs);
@@ -521,8 +814,7 @@ function loop(ts) {
     result.close();
   } catch (e) {
     dbg('segment() erro: ' + e.message, 'err');
-    status.className   = 'err';
-    status.textContent = 'Erro: ' + e.message;
+    setStatus('Erro: ' + e.message, true);
   }
 
   requestAnimationFrame(loop);
@@ -548,7 +840,6 @@ function drawStarPath(cx, cy, pts, ro, ri) {
   }
   ctx.closePath();
 }
-
 
 function drawRing(cx, cy, r, color) {
   ctx.strokeStyle = color;
@@ -597,14 +888,12 @@ function renderCard(personSrc) {
   ctx.fillRect(0, 0, CW, CH);
 
   // ── 2. Elementos decorativos (atrás da pessoa) ───
-  // Anéis na base da zona de foto
   ctx.save();
   ctx.globalAlpha = 0.09;
   drawRing(CW/2, BOT_Y - Math.round(55*S), Math.round(155*S), '#FFDF00');
   drawRing(CW/2, BOT_Y - Math.round(30*S), Math.round(105*S), '#FFDF00');
   ctx.restore();
 
-  // Estrelas nos cantos (evitam o centro onde fica a pessoa)
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
   [
@@ -620,7 +909,6 @@ function renderCard(personSrc) {
     ctx.fillText('★', cx, cy);
   });
 
-  // Raio diagonal dourado (sutil)
   ctx.save();
   ctx.strokeStyle = 'rgba(255,220,0,0.09)';
   ctx.lineWidth   = 2;
@@ -694,7 +982,6 @@ function renderCard(personSrc) {
   for (let i = 0; i < 5; i++)
     ctx.fillText('★', hPad + i * Math.round(10*S), Math.round(51*S));
 
-  // Badge central
   const badgeCX = CW / 2, badgeCY = TOP_H / 2;
   const badgeR  = Math.round(19 * S);
   ctx.fillStyle   = 'rgba(0,60,20,0.85)';
@@ -717,11 +1004,10 @@ function renderCard(personSrc) {
   ctx.font      = `900 ${Math.round(30*S)}px Poppins, "Arial Black", Arial`;
   ctx.fillText('2026', CW - hPad, Math.round(18*S));
 
-  // Cantos no limite foto/header
-  drawCornerBracket(Math.round(10*S),     PZ_Y + Math.round(8*S), 'tl');
+  drawCornerBracket(Math.round(10*S),      PZ_Y + Math.round(8*S), 'tl');
   drawCornerBracket(CW - Math.round(10*S), PZ_Y + Math.round(8*S), 'tr');
 
-  // ── 9. Painel info (fundo escuro, cantos superiores arredondados) ─
+  // ── 9. Painel info ───────────────────────────────
   const panelPath = new Path2D();
   panelPath.roundRect(0, BOT_Y, CW, BOT_H, [14, 14, 0, 0]);
   ctx.fillStyle = 'rgba(0,20,8,0.96)';
@@ -729,10 +1015,10 @@ function renderCard(personSrc) {
 
   // ── 10. Ghost elements no painel ─────────────────
   ctx.save();
-  ctx.globalAlpha = 0.12;
-  ctx.fillStyle   = '#FFDF00';
-  ctx.font        = `900 ${Math.round(68*S)}px Poppins, "Arial Black", Arial`;
-  ctx.textAlign   = 'right';
+  ctx.globalAlpha  = 0.12;
+  ctx.fillStyle    = '#FFDF00';
+  ctx.font         = `900 ${Math.round(68*S)}px Poppins, "Arial Black", Arial`;
+  ctx.textAlign    = 'right';
   ctx.textBaseline = 'top';
   ctx.fillText('BRASIL', CW + Math.round(8*S), BOT_Y - Math.round(8*S));
   ctx.restore();
@@ -769,7 +1055,6 @@ function renderCard(personSrc) {
   ctx.fillStyle   = 'rgba(255,223,0,0.5)';
   ctx.fillRect(inPad, tickY, Math.round(32 * S), Math.round(3 * S));
 
-  // Cargo · Departamento
   const roleLineH = Math.round(12 * S * 1.55);
   const roleY     = tickY + Math.round(3 * S) + Math.round(5 * S);
   ctx.fillStyle    = 'rgba(255,255,255,0.85)';
@@ -814,7 +1099,7 @@ function renderCard(personSrc) {
 
 // ── Cache localStorage (TTL 1 dia) ───────────────────────────
 const CACHE_KEY = 'figurinha_copa2026';
-const CACHE_TTL = 86_400_000; // 1 dia em ms
+const CACHE_TTL = 86_400_000;
 
 function saveCache() {
   const data = {
@@ -841,48 +1126,56 @@ function loadCache() {
 }
 
 // ── Eventos ──────────────────────────────────────────────────
-btnStart.addEventListener('click', async () => {
-  try {
-    status.textContent = 'Acessando câmera…';
-    await initCamera();
-  } catch (e) {
-    status.className   = 'err';
-    status.textContent = 'Erro câmera: ' + e.message;
-  }
+// Contador de caracteres do nome
+nameInput.addEventListener('input', () => {
+  nameCount.textContent = `${nameInput.value.length} / 20`;
+  nameInput.classList.remove('err');
+  formError.textContent = '';
 });
-
-btnStop.addEventListener('click', stopCamera);
-
-btnFlip.addEventListener('click', async () => {
-  try {
-    await flipCamera();
-  } catch (e) {
-    status.className   = 'err';
-    status.textContent = 'Erro ao trocar câmera: ' + e.message;
-  }
-});
-
-btnDl.addEventListener('click', () => {
-  const a    = document.createElement('a');
-  const slug = (nameInput.value || 'jogador').replace(/\s+/g, '-').toLowerCase();
-  a.href     = canvas.toDataURL('image/png');
-  a.download = `figurinha-copa2026-${slug}.png`;
-  a.click();
-});
-
-[nameInput, numInput, cargoInput, deptoInput].forEach(el =>
-  el.addEventListener('input', () => { saveCache(); if (!running) renderCard(null); })
+[deptoInput, cargoInput, numInput].forEach(el =>
+  el.addEventListener('input', () => { el.classList.remove('err'); formError.textContent = ''; })
 );
+
+// Form → Sticker
+btnGenerate.addEventListener('click', () => {
+  if (!validateForm()) return;
+  saveCache();
+  showSticker();
+});
+
+// Sticker → Form
+btnBack.addEventListener('click', showForm);
+
+// Shutter: congela imagem
+btnShutter.addEventListener('click', () => {
+  running = false;
+  setFrozenUI();
+});
+
+// Retry: retoma câmera
+btnRetry.addEventListener('click', () => {
+  running = true;
+  lastTs  = 0; fpsArr = [];
+  setLiveUI();
+  requestAnimationFrame(loop);
+});
+
+// Compartilhar
+btnShare.addEventListener('click', shareSticker);
+
+// Trocar câmera
+btnFlip.addEventListener('click', async () => {
+  try { await flipCamera(); }
+  catch (e) { setStatus('Erro ao trocar câmera: ' + e.message, true); }
+});
 
 // ── Init ─────────────────────────────────────────────────────
 loadCache();
+nameCount.textContent = `${nameInput.value.length} / 20`;
 document.fonts.ready.then(() => renderCard(null));
 
-loadModel().catch(e => {
-  status.className   = 'err';
-  status.textContent = 'Erro ao carregar modelo: ' + e.message;
-  console.error(e);
-});
+// Carrega modelo em background — câmera só inicia após form submit
+loadModel();
 </script>
 </body>
 </html>
