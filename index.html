@@ -499,7 +499,7 @@ function setStatus(msg, isErr = false) {
 function hideStatus() {
   if (!statusHidden) {
     statusHidden = true;
-    if (statusOverlay) statusOverlay.classList.add('hidden');
+    if (statusOverlay) statusOverlay.style.display = 'none';
   }
 }
 
